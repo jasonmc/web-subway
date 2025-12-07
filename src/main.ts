@@ -5,7 +5,7 @@ const { transit_realtime } = transitRealtime;
 
 const DEFAULT_FEED_URL =
   "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g";
-const GREENPOINT_STOP_ID_PREFIX = "G22";
+const GREENPOINT_STOP_ID_PREFIX = "G26";
 
 type Direction = "Northbound" | "Southbound" | "Other";
 
@@ -147,7 +147,7 @@ function render(arrivals: ArrivalGroup, meta: FeedMeta) {
   statusEl.className = "status";
   statusEl.textContent =
     total === 0
-      ? "No arrivals found for G22 right now."
+      ? "No arrivals found for G26 right now."
       : `Feed age: ${meta.ageText} • Showing ${total} arrival${
           total === 1 ? "" : "s"
         }`;
@@ -191,7 +191,7 @@ function render(arrivals: ArrivalGroup, meta: FeedMeta) {
 
   if (listsEl.innerHTML.trim() === "") {
     listsEl.innerHTML =
-      '<article class="card"><p class="meta">No arrivals for G22 in the feed.</p></article>';
+      '<article class="card"><p class="meta">No arrivals for G26 in the feed.</p></article>';
   }
 }
 
