@@ -1,5 +1,7 @@
-import { transit_realtime } from "gtfs-realtime-bindings";
+import * as transitRealtime from "gtfs-realtime-bindings";
 import "./style.css";
+
+const { transit_realtime } = transitRealtime;
 
 const DEFAULT_FEED_URL =
   "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g";
@@ -23,6 +25,20 @@ type FeedMeta = {
 const statusEl = document.querySelector<HTMLElement>("#status");
 const listsEl = document.querySelector<HTMLElement>("#lists");
 const refreshBtn = document.querySelector<HTMLButtonElement>("#refresh");
+
+// Coerce protobuf Long/number/undefined to number (seconds since epoch).
+function toInt(value: unknown): number | undefined {
+  if (typeof value === "number") return value;
+  if (typeof value === "bigint") return Number(value);
+  if (value && typeof value === "object" && "toNumber" in value) {
+    try {
+      return (value as { toNumber: () => number }).toNumber();
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
 
 function formatRelative(target: Date): string {
   const now = new Date();
@@ -52,9 +68,7 @@ function parseFeed(feed: transit_realtime.FeedMessage): {
   const south: Arrival[] = [];
   const other: Arrival[] = [];
 
-  const headerTs = feed.header.timestamp?.toNumber
-    ? feed.header.timestamp.toNumber()
-    : feed.header.timestamp ?? null;
+  const headerTs = toInt(feed.header?.timestamp ?? undefined) ?? null;
   const ageText = headerTs
     ? formatRelative(new Date(headerTs * 1000)).replace("in ", "") + " ago"
     : "unknown";
@@ -65,7 +79,7 @@ function parseFeed(feed: transit_realtime.FeedMessage): {
 
     const route = tripUpdate.trip?.routeId ?? "?";
     const baseDirection: Direction = (() => {
-      const dir = tripUpdate.trip?.directionId;
+      const dir = toInt(tripUpdate.trip?.directionId);
       if (dir === 0) return "Northbound";
       if (dir === 1) return "Southbound";
       return "Other";
@@ -75,11 +89,7 @@ function parseFeed(feed: transit_realtime.FeedMessage): {
       const stopId = stu.stopId;
       if (!stopId || !stopId.startsWith(GREENPOINT_STOP_ID_PREFIX)) continue;
 
-      const rawTs =
-        stu.arrival?.time?.toNumber?.() ??
-        stu.arrival?.time ??
-        stu.departure?.time?.toNumber?.() ??
-        stu.departure?.time;
+      const rawTs = toInt(stu.arrival?.time) ?? toInt(stu.departure?.time);
       if (!rawTs) continue;
 
       const when = new Date(rawTs * 1000);
@@ -192,10 +202,7 @@ async function load() {
 
     const feedUrl = import.meta.env.VITE_MTA_FEED_URL ?? DEFAULT_FEED_URL;
 
-    const response = await fetch(feedUrl, {
-      headers: {  },
-      mode: "cors"
-    });
+    const response = await fetch(feedUrl, { mode: "cors" });
     if (!response.ok) {
       throw new Error(`Request failed: ${response.status} ${response.statusText}`);
     }
