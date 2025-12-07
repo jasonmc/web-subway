@@ -1,0 +1,140 @@
+:root {
+  color-scheme: light;
+  font-family: "Soehne", "Helvetica Neue", Arial, sans-serif;
+  background: radial-gradient(circle at 30% 20%, #f5f7ff, #f7fafc 30%), #f7fafc;
+  color: #0f172a;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.app {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 40px 20px 80px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+h1 {
+  font-size: 2.2rem;
+  margin: 4px 0;
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.85rem;
+  color: #4f46e5;
+  font-weight: 700;
+}
+
+.sub {
+  margin: 0;
+  color: #475569;
+}
+
+button {
+  border: 1px solid #cbd5e1;
+  background: #0f172a;
+  color: #f8fafc;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.1);
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+.status {
+  margin: 24px 0 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #eef2ff;
+  color: #312e81;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
+}
+
+.card h2 {
+  margin: 0 0 10px;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.arrival {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.arrival:last-child {
+  border-bottom: none;
+}
+
+.route {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #16a34a;
+  color: white;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.time {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.meta {
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.error {
+  background: #fef2f2;
+  color: #991b1b;
+}

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Greenpoint Av Subway Arrivals</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header>
+        <div>
+          <p class="eyebrow">🚇 Greenpoint Av</p>
+          <h1>Live G train arrivals</h1>
+          <p class="sub">Filters GTFS-RT feed for stop ID prefix G22</p>
+        </div>
+        <button id="refresh">Refresh</button>
+      </header>
+      <section id="status" class="status">Loading…</section>
+      <section id="lists" class="lists"></section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

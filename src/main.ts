@@ -1,0 +1,219 @@
+import { transit_realtime } from "gtfs-realtime-bindings";
+import "./style.css";
+
+const DEFAULT_FEED_URL =
+  "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g";
+const GREENPOINT_STOP_ID_PREFIX = "G22";
+
+type Direction = "Northbound" | "Southbound" | "Other";
+
+type Arrival = {
+  time: Date;
+  route: string;
+  direction: Direction;
+  label?: string;
+};
+
+type ArrivalGroup = Record<Direction, Arrival[]>;
+
+type FeedMeta = {
+  ageText: string;
+};
+
+const statusEl = document.querySelector<HTMLElement>("#status");
+const listsEl = document.querySelector<HTMLElement>("#lists");
+const refreshBtn = document.querySelector<HTMLButtonElement>("#refresh");
+
+function formatRelative(target: Date): string {
+  const now = new Date();
+  const diffMs = target.getTime() - now.getTime();
+  const diffMin = Math.round(diffMs / 60000);
+  if (diffMin <= 0) return "due";
+  if (diffMin === 1) return "in 1 min";
+  if (diffMin < 60) return `in ${diffMin} min`;
+  const hours = Math.floor(diffMin / 60);
+  const minutes = diffMin % 60;
+  return minutes === 0 ? `in ${hours}h` : `in ${hours}h ${minutes}m`;
+}
+
+function headway(current: Arrival, next?: Arrival): string {
+  if (!next) return "";
+  const diffMs = next.time.getTime() - current.time.getTime();
+  const diffMin = Math.round(diffMs / 60000);
+  return diffMin > 0 ? ` • next in ${diffMin}m` : "";
+}
+
+function parseFeed(feed: transit_realtime.FeedMessage): {
+  arrivals: ArrivalGroup;
+  meta: FeedMeta;
+} {
+  const now = new Date();
+  const north: Arrival[] = [];
+  const south: Arrival[] = [];
+  const other: Arrival[] = [];
+
+  const headerTs = feed.header.timestamp?.toNumber
+    ? feed.header.timestamp.toNumber()
+    : feed.header.timestamp ?? null;
+  const ageText = headerTs
+    ? formatRelative(new Date(headerTs * 1000)).replace("in ", "") + " ago"
+    : "unknown";
+
+  for (const entity of feed.entity) {
+    const tripUpdate = entity.tripUpdate;
+    if (!tripUpdate) continue;
+
+    const route = tripUpdate.trip?.routeId ?? "?";
+    const baseDirection: Direction = (() => {
+      const dir = tripUpdate.trip?.directionId;
+      if (dir === 0) return "Northbound";
+      if (dir === 1) return "Southbound";
+      return "Other";
+    })();
+
+    for (const stu of tripUpdate.stopTimeUpdate ?? []) {
+      const stopId = stu.stopId;
+      if (!stopId || !stopId.startsWith(GREENPOINT_STOP_ID_PREFIX)) continue;
+
+      const rawTs =
+        stu.arrival?.time?.toNumber?.() ??
+        stu.arrival?.time ??
+        stu.departure?.time?.toNumber?.() ??
+        stu.departure?.time;
+      if (!rawTs) continue;
+
+      const when = new Date(rawTs * 1000);
+      if (when.getTime() < now.getTime()) continue;
+
+      const dir: Direction = (() => {
+        const lastChar = stopId.at(-1);
+        if (lastChar === "N") return "Northbound";
+        if (lastChar === "S") return "Southbound";
+        return baseDirection;
+      })();
+
+      const collection =
+        dir === "Northbound" ? north : dir === "Southbound" ? south : other;
+      collection.push({ time: when, route, direction: dir });
+    }
+  }
+
+  const sortByTime = (a: Arrival, b: Arrival) =>
+    a.time.getTime() - b.time.getTime();
+  north.sort(sortByTime);
+  south.sort(sortByTime);
+  other.sort(sortByTime);
+
+  return {
+    arrivals: {
+      Northbound: north,
+      Southbound: south,
+      Other: other
+    },
+    meta: { ageText }
+  };
+}
+
+function render(arrivals: ArrivalGroup, meta: FeedMeta) {
+  if (!statusEl || !listsEl) return;
+
+  const total =
+    arrivals.Northbound.length +
+    arrivals.Southbound.length +
+    arrivals.Other.length;
+
+  statusEl.className = "status";
+  statusEl.textContent =
+    total === 0
+      ? "No arrivals found for G22 right now."
+      : `Feed age: ${meta.ageText} • Showing ${total} arrival${
+          total === 1 ? "" : "s"
+        }`;
+
+  const cards: Array<{ title: string; icon: string; items: Arrival[] }> = [
+    { title: "Northbound", icon: "⬆️", items: arrivals.Northbound.slice(0, 3) },
+    { title: "Southbound", icon: "⬇️", items: arrivals.Southbound.slice(0, 3) },
+    { title: "Other", icon: "⬜", items: arrivals.Other.slice(0, 3) }
+  ];
+
+  listsEl.innerHTML = cards
+    .filter((c) => c.items.length > 0)
+    .map(
+      (card) => `
+      <article class="card">
+        <h2>${card.icon} ${card.title}</h2>
+        ${card.items
+          .map((arrival, idx) => {
+            const next = card.items[idx + 1];
+            return `
+              <div class="arrival">
+                <div>
+                  <span class="route">${arrival.route}</span>
+                  <span class="meta"> ${formatRelative(arrival.time)}${headway(
+                    arrival,
+                    next
+                  )}</span>
+                </div>
+                <span class="time">${arrival.time.toLocaleTimeString([], {
+                  hour: "numeric",
+                  minute: "2-digit"
+                })}</span>
+              </div>
+            `;
+          })
+          .join("")}
+      </article>
+    `
+    )
+    .join("");
+
+  if (listsEl.innerHTML.trim() === "") {
+    listsEl.innerHTML =
+      '<article class="card"><p class="meta">No arrivals for G22 in the feed.</p></article>';
+  }
+}
+
+function setError(message: string) {
+  if (statusEl) {
+    statusEl.className = "status error";
+    statusEl.textContent = message;
+  }
+  if (listsEl) {
+    listsEl.innerHTML = "";
+  }
+}
+
+async function load() {
+  try {
+    if (statusEl) {
+      statusEl.className = "status";
+      statusEl.textContent = "Loading…";
+    }
+
+    const feedUrl = import.meta.env.VITE_MTA_FEED_URL ?? DEFAULT_FEED_URL;
+
+    const response = await fetch(feedUrl, {
+      headers: {  },
+      mode: "cors"
+    });
+    if (!response.ok) {
+      throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+    }
+
+    const buf = await response.arrayBuffer();
+    const feed = transit_realtime.FeedMessage.decode(new Uint8Array(buf));
+    const { arrivals, meta } = parseFeed(feed);
+    render(arrivals, meta);
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Failed to load arrivals.";
+    setError(message);
+    console.error(err);
+  }
+}
+
+refreshBtn?.addEventListener("click", () => {
+  load();
+});
+
+load();
