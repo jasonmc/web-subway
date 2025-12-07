@@ -25,6 +25,8 @@ type FeedMeta = {
 const statusEl = document.querySelector<HTMLElement>("#status");
 const listsEl = document.querySelector<HTMLElement>("#lists");
 const refreshBtn = document.querySelector<HTMLButtonElement>("#refresh");
+let refreshTimer: number | undefined;
+let fetching = false;
 
 // Coerce protobuf Long/number/undefined to number (seconds since epoch).
 function toInt(value: unknown): number | undefined {
@@ -52,6 +54,18 @@ function formatRelative(target: Date): string {
   return minutes === 0 ? `in ${hours}h` : `in ${hours}h ${minutes}m`;
 }
 
+function formatAge(target: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - target.getTime();
+  const diffMin = Math.round(diffMs / 60000);
+  if (diffMin <= 0) return "just now";
+  if (diffMin === 1) return "1 min ago";
+  if (diffMin < 60) return `${diffMin} min ago`;
+  const hours = Math.floor(diffMin / 60);
+  const minutes = diffMin % 60;
+  return minutes === 0 ? `${hours}h ago` : `${hours}h ${minutes}m ago`;
+}
+
 function headway(current: Arrival, next?: Arrival): string {
   if (!next) return "";
   const diffMs = next.time.getTime() - current.time.getTime();
@@ -69,9 +83,7 @@ function parseFeed(feed: transit_realtime.FeedMessage): {
   const other: Arrival[] = [];
 
   const headerTs = toInt(feed.header?.timestamp ?? undefined) ?? null;
-  const ageText = headerTs
-    ? formatRelative(new Date(headerTs * 1000)).replace("in ", "") + " ago"
-    : "unknown";
+  const ageText = headerTs ? formatAge(new Date(headerTs * 1000)) : "unknown";
 
   for (const entity of feed.entity) {
     const tripUpdate = entity.tripUpdate;
@@ -193,9 +205,20 @@ function setError(message: string) {
   }
 }
 
-async function load() {
+function scheduleRefresh(intervalMs = 5000) {
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+  }
+  refreshTimer = window.setInterval(() => {
+    void load(false);
+  }, intervalMs);
+}
+
+async function load(showLoading = true) {
+  if (fetching) return;
+  fetching = true;
   try {
-    if (statusEl) {
+    if (statusEl && showLoading) {
       statusEl.className = "status";
       statusEl.textContent = "Loading…";
     }
@@ -216,11 +239,15 @@ async function load() {
       err instanceof Error ? err.message : "Failed to load arrivals.";
     setError(message);
     console.error(err);
+  } finally {
+    fetching = false;
   }
 }
 
 refreshBtn?.addEventListener("click", () => {
-  load();
+  void load();
+  scheduleRefresh();
 });
 
-load();
+void load();
+scheduleRefresh();

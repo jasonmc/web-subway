@@ -31,8 +31,6 @@
         };
       in {
         packages.default = web;
-        devShells.default = pkgs.mkShell {
-          packages = [ pkgs.nodejs pkgs.nodePackages.npm pkgs.vite ];
-        };
+        devShells.default = pkgs.mkShell { inputsFrom = [ web ]; };
       });
 }
