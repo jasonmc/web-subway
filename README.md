@@ -23,6 +23,11 @@ npm run dev
 ```
 Open the printed local URL. Click **Refresh** to refetch the feed.
 
+## Tests
+
+- `npm run typecheck`
+- `npm run test:e2e` builds the bundle and runs a Node-based harness against the inlined `dist/index.html` output. `nix flake check` executes this.
+
 ## Nix build (single-file, no CDN)
 
 There is a standalone flake in this folder that builds the static site (`flake.nix`). The Vite build is configured with `vite-plugin-singlefile`, so the output `dist/index.html` contains all JS/CSS inlined (no CDN and no additional assets).

@@ -10,12 +10,13 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
+        src = pkgs.lib.cleanSource ./.;
+        npmDepsHash = "sha256-VVoBU8lJfAanEXEoCD/ziJM4WteHX0HjKxVlVdE9Os8=";
+        npmInstallFlags = [ "--legacy-peer-deps" ];
         web = pkgs.buildNpmPackage {
           pname = "greenpoint-subway-web";
           version = "0.1.0";
-          src = pkgs.lib.cleanSource ./.;
-          npmDepsHash = "sha256-VVoBU8lJfAanEXEoCD/ziJM4WteHX0HjKxVlVdE9Os8=";
-          npmInstallFlags = [ "--legacy-peer-deps" ];
+          inherit src npmDepsHash npmInstallFlags;
           npmBuildScript = "build";
           installPhase = ''
             runHook preInstall
@@ -29,8 +30,20 @@
             platforms = platforms.all;
           };
         };
+        tests = pkgs.buildNpmPackage {
+          pname = "greenpoint-subway-web-e2e";
+          version = "0.1.0";
+          inherit src npmDepsHash npmInstallFlags;
+          npmBuildScript = "test:e2e";
+          installPhase = ''
+            runHook preInstall
+            mkdir -p $out
+            runHook postInstall
+          '';
+        };
       in {
         packages.default = web;
+        checks.e2e = tests;
         devShells.default = pkgs.mkShell { inputsFrom = [ web ]; };
       });
 }

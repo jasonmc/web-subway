@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "npm run build -- --emptyOutDir=false && node --test tests/e2e.test.mjs"
   },
   "dependencies": {
     "gtfs-realtime-bindings": "1.1.1"
