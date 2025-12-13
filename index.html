@@ -10,11 +10,17 @@
     <main class="app">
       <header>
         <div>
-          <p class="eyebrow">🚇 Greenpoint Av</p>
+          <p class="eyebrow">🚇 <span id="stop-name"></span></p>
           <h1>Live G train arrivals</h1>
-          <p class="sub">Filters GTFS-RT feed for stop ID prefix G22</p>
+          <p class="sub">Select any station (defaults to Greenpoint Av / G26)</p>
         </div>
-        <button id="refresh">Refresh</button>
+        <div class="controls">
+          <label class="field">
+            <span class="label">Station</span>
+            <select id="stop-select" name="stop-select"></select>
+          </label>
+          <button id="refresh">Refresh</button>
+        </div>
       </header>
       <section id="status" class="status">Loading…</section>
       <section id="lists" class="lists"></section>

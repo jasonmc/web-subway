@@ -21,12 +21,14 @@ Minimal Vite + TypeScript page that pulls the MTA GTFS-RT G train feed, filters 
 ```sh
 npm run dev
 ```
-Open the printed local URL. Click **Refresh** to refetch the feed.
+Open the printed local URL. Pick a station from the dropdown (defaults to Greenpoint Av / G26). The current station is kept in the URL hash (`#G26`) so reloads/bookmarks preserve your selection. Click **Refresh** to refetch the feed.
+
+Note: the stops list is shipped compressed (gzip) and decompressed client-side; requires a browser with `DecompressionStream` support (modern Chrome/Edge/Safari).
 
 ## Tests
 
 - `npm run typecheck`
-- `npm run test:e2e` builds the bundle and runs a Node-based harness against the inlined `dist/index.html` output. `nix flake check` executes this.
+- `npm run test:e2e` builds the bundle and runs a Node-based harness against the inlined `dist/index.html` output (includes stop selection). `nix flake check` executes this.
 
 ## Nix build (single-file, no CDN)
 

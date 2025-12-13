@@ -1,11 +1,13 @@
 import * as transitRealtime from "gtfs-realtime-bindings";
+import stopsCsvGzUrl from "../all_stops.csv.gz?url";
 import "./style.css";
 
 const { transit_realtime } = transitRealtime;
 
 const DEFAULT_FEED_URL =
   "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g";
-const GREENPOINT_STOP_ID_PREFIX = "G26";
+const DEFAULT_STOP_ID_PREFIX = "G26";
+const STOP_SUFFIX_RE = /[NS]$/;
 
 type Direction = "Northbound" | "Southbound" | "Other";
 
@@ -24,9 +26,133 @@ type FeedMeta = {
 
 const statusEl = document.querySelector<HTMLElement>("#status");
 const listsEl = document.querySelector<HTMLElement>("#lists");
+const stopSelect = document.querySelector<HTMLSelectElement>("#stop-select");
 const refreshBtn = document.querySelector<HTMLButtonElement>("#refresh");
+const stopNameEl = document.querySelector<HTMLElement>("#stop-name");
 let refreshTimer: number | undefined;
 let fetching = false;
+let selectedStopPrefix = DEFAULT_STOP_ID_PREFIX;
+
+type StopOption = { id: string; name: string };
+
+function parseStops(csv: string): StopOption[] {
+  const rows = csv.trim().split(/\r?\n/);
+  const [, ...dataRows] = rows;
+  const byId = new Map<string, StopOption>();
+
+  for (const row of dataRows) {
+    if (!row.trim()) continue;
+    const [stopId, stopName, , , locationType, parentStation] = row.split(",");
+    if (!stopId || !stopName) continue;
+
+    const baseId =
+      parentStation ||
+      (locationType === "1" ? stopId : stopId.replace(/[NS]$/, ""));
+
+    if (!byId.has(baseId)) {
+      byId.set(baseId, { id: baseId, name: stopName });
+    }
+  }
+
+  return Array.from(byId.values()).sort((a, b) =>
+    a.name.localeCompare(b.name, "en")
+  );
+}
+
+function stopFromLocation(): string | null {
+  try {
+    const url = new URL(window.location.href);
+    const hash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+    return hash || null;
+  } catch {
+    return null;
+  }
+}
+
+let stopOptions: StopOption[] = [];
+let defaultStop: StopOption = {
+  id: DEFAULT_STOP_ID_PREFIX,
+  name: "Default stop"
+};
+
+async function loadStopsCsv(): Promise<string> {
+  const response = await fetch(stopsCsvGzUrl);
+  if (!response.ok) throw new Error(`Stops fetch failed: ${response.status}`);
+  const buf = await response.arrayBuffer();
+
+  const tryDecompress = async () => {
+    if (!("DecompressionStream" in window)) {
+      throw new Error("DecompressionStream not supported in this browser.");
+    }
+    const stream = new Blob([buf]).stream().pipeThrough(
+      new DecompressionStream("gzip")
+    );
+    return new Response(stream).text();
+  };
+
+  let text: string;
+  try {
+    text = await tryDecompress();
+  } catch {
+    text = new TextDecoder().decode(buf);
+  }
+
+  if (!text.includes(",")) throw new Error("Invalid stops csv");
+  return text;
+}
+
+async function initStops() {
+  const csv = await loadStopsCsv();
+  stopOptions = parseStops(csv);
+  defaultStop =
+    stopOptions.find((s) => s.id === DEFAULT_STOP_ID_PREFIX) ??
+    stopOptions[0] ??
+    { id: DEFAULT_STOP_ID_PREFIX, name: "Default stop" };
+  const urlStop = stopFromLocation();
+  const validUrlStop = stopOptions.some((s) => s.id === urlStop)
+    ? urlStop
+    : null;
+  selectedStopPrefix = validUrlStop ?? defaultStop.id;
+}
+
+function currentStopName(): string {
+  return (
+    stopOptions.find((s) => s.id === selectedStopPrefix)?.name ??
+    `Stop ${selectedStopPrefix}`
+  );
+}
+
+function updateStopLabel() {
+  if (stopNameEl) {
+    stopNameEl.textContent = currentStopName();
+  }
+}
+
+function syncStopParam() {
+  try {
+    const url = new URL(window.location.href);
+    url.hash = selectedStopPrefix;
+    window.history.replaceState({}, "", url);
+  } catch {
+    // ignore if history/location not available
+  }
+}
+
+function stopIdPrefixOf(stopId: string): string {
+  return stopId.replace(STOP_SUFFIX_RE, "");
+}
+
+function stopsWithArrivals(feed: transit_realtime.FeedMessage): Set<string> {
+  const ids = new Set<string>();
+  for (const entity of feed.entity) {
+    const updates = entity.tripUpdate?.stopTimeUpdate ?? [];
+    for (const stu of updates) {
+      if (!stu.stopId) continue;
+      ids.add(stopIdPrefixOf(stu.stopId));
+    }
+  }
+  return ids;
+}
 
 // Coerce protobuf Long/number/undefined to number (seconds since epoch).
 function toInt(value: unknown): number | undefined {
@@ -73,7 +199,10 @@ function headway(current: Arrival, next?: Arrival): string {
   return diffMin > 0 ? ` • next in ${diffMin}m` : "";
 }
 
-function parseFeed(feed: transit_realtime.FeedMessage): {
+function parseFeed(
+  feed: transit_realtime.FeedMessage,
+  stopIdPrefix: string
+): {
   arrivals: ArrivalGroup;
   meta: FeedMeta;
 } {
@@ -99,7 +228,7 @@ function parseFeed(feed: transit_realtime.FeedMessage): {
 
     for (const stu of tripUpdate.stopTimeUpdate ?? []) {
       const stopId = stu.stopId;
-      if (!stopId || !stopId.startsWith(GREENPOINT_STOP_ID_PREFIX)) continue;
+      if (!stopId || !stopId.startsWith(stopIdPrefix)) continue;
 
       const rawTs = toInt(stu.arrival?.time) ?? toInt(stu.departure?.time);
       if (!rawTs) continue;
@@ -145,10 +274,11 @@ function render(arrivals: ArrivalGroup, meta: FeedMeta) {
     arrivals.Other.length;
 
   statusEl.className = "status";
+  const stopName = currentStopName();
   statusEl.textContent =
     total === 0
-      ? "No arrivals found for G26 right now."
-      : `Feed age: ${meta.ageText} • Showing ${total} arrival${
+      ? `No arrivals found for ${stopName} right now.`
+      : `${stopName} • Feed age: ${meta.ageText} • Showing ${total} arrival${
           total === 1 ? "" : "s"
         }`;
 
@@ -191,7 +321,7 @@ function render(arrivals: ArrivalGroup, meta: FeedMeta) {
 
   if (listsEl.innerHTML.trim() === "") {
     listsEl.innerHTML =
-      '<article class="card"><p class="meta">No arrivals for G26 in the feed.</p></article>';
+      `<article class="card"><p class="meta">No arrivals for ${currentStopName()} in the feed.</p></article>`;
   }
 }
 
@@ -214,6 +344,43 @@ function scheduleRefresh(intervalMs = 5000) {
   }, intervalMs);
 }
 
+function updateStopSelect(available?: Set<string>) {
+  if (!stopSelect) return;
+
+  const filtered =
+    available && available.size > 0
+      ? stopOptions.filter((s) => available.has(s.id))
+      : stopOptions;
+
+  stopSelect.innerHTML = filtered
+    .map(
+      (stop) =>
+        `<option value="${stop.id}" ${
+          stop.id === selectedStopPrefix ? "selected" : ""
+        }>${stop.name}</option>`
+    )
+    .join("");
+
+  if (!filtered.some((s) => s.id === selectedStopPrefix) && filtered[0]) {
+    selectedStopPrefix = filtered[0].id;
+  }
+
+  stopSelect.value = selectedStopPrefix;
+  syncStopParam();
+}
+
+function initStopSelect() {
+  updateStopSelect();
+
+  stopSelect.addEventListener("change", () => {
+    selectedStopPrefix = stopSelect.value;
+    updateStopLabel();
+    syncStopParam();
+    void load();
+    scheduleRefresh();
+  });
+}
+
 async function load(showLoading = true) {
   if (fetching) return;
   fetching = true;
@@ -232,7 +399,13 @@ async function load(showLoading = true) {
 
     const buf = await response.arrayBuffer();
     const feed = transit_realtime.FeedMessage.decode(new Uint8Array(buf));
-    const { arrivals, meta } = parseFeed(feed);
+    const availableStops = stopsWithArrivals(feed);
+    if (availableStops.size > 0) {
+      updateStopSelect(availableStops);
+      updateStopLabel();
+      syncStopParam();
+    }
+    const { arrivals, meta } = parseFeed(feed, selectedStopPrefix);
     render(arrivals, meta);
   } catch (err) {
     const message =
@@ -249,5 +422,16 @@ refreshBtn?.addEventListener("click", () => {
   scheduleRefresh();
 });
 
-void load();
-scheduleRefresh();
+void (async () => {
+  try {
+    await initStops();
+    updateStopLabel();
+    initStopSelect();
+    syncStopParam();
+    await load();
+    scheduleRefresh();
+  } catch (err) {
+    console.error(err);
+    setError("Failed to load stops list.");
+  }
+})();

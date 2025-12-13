@@ -9,6 +9,7 @@ import gtfs from "gtfs-realtime-bindings";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
 const distIndexPath = path.join(projectRoot, "dist", "index.html");
+const stopsCsv = "stop_id,stop_name\nG26,Greenpoint Av\nG22,Other Stop\n";
 
 const fixedNowMs = Date.parse("2024-01-01T12:00:00Z");
 const fixedNowSeconds = Math.floor(fixedNowMs / 1000);
@@ -19,6 +20,7 @@ class StubElement {
     this.className = "";
     this.textContent = "";
     this.innerHTML = "";
+    this.value = "";
     this.handlers = new Map();
   }
 
@@ -36,7 +38,9 @@ class StubDocument {
     this.nodes = {
       "#status": new StubElement("div"),
       "#lists": new StubElement("div"),
-      "#refresh": new StubElement("button")
+      "#refresh": new StubElement("button"),
+      "#stop-select": new StubElement("select"),
+      "#stop-name": new StubElement("span")
     };
   }
 
@@ -116,10 +120,17 @@ function buildFeedBuffer(nowSeconds) {
 function createSandbox(feedBuffer) {
   const document = new StubDocument();
   const intervals = new Map();
-  let fetchCount = 0;
+  let feedFetchCount = 0;
+  let stopsFetchCount = 0;
 
-  const fetchMock = async () => {
-    fetchCount += 1;
+  const fetchMock = async (url) => {
+    const isStops = typeof url === "string" && url.includes("all_stops");
+    if (isStops) {
+      stopsFetchCount += 1;
+      const bytes = new TextEncoder().encode(stopsCsv);
+      return new Response(bytes);
+    }
+    feedFetchCount += 1;
     return new Response(feedBuffer);
   };
 
@@ -139,11 +150,48 @@ function createSandbox(feedBuffer) {
     }
   }
 
+  const location = {
+    href: "https://example.com/",
+    search: "",
+    pathname: "/",
+    hash: "",
+    toString() {
+      return this.href;
+    }
+  };
+
+  const applyUrl = (urlString) => {
+    const next = new URL(urlString, location.href);
+    location.href = next.href;
+    location.search = next.search;
+    location.pathname = next.pathname;
+    location.hash = next.hash;
+  };
+
+  const history = {
+    replaceState: (_state, _title, url) => {
+      if (url) applyUrl(typeof url === "string" ? url : String(url));
+    }
+  };
+
+  class IdentityDecompressionStream {
+    constructor() {
+      return new TransformStream({
+        transform(chunk, controller) {
+          controller.enqueue(chunk);
+        }
+      });
+    }
+  }
+
   const context = {
     console,
     fetch: fetchMock,
     Response,
     document,
+    location,
+    history,
+    DecompressionStream: IdentityDecompressionStream,
     navigator: { userAgent: "node" },
     setTimeout,
     clearTimeout,
@@ -163,7 +211,8 @@ function createSandbox(feedBuffer) {
   return {
     context,
     document,
-    fetchCount: () => fetchCount
+    feedFetchCount: () => feedFetchCount,
+    stopsFetchCount: () => stopsFetchCount
   };
 }
 
@@ -188,19 +237,30 @@ test("renders arrivals from bundled app and refreshes", async () => {
   const html = fs.readFileSync(distIndexPath, "utf8");
   const script = extractInlineModule(html);
   const feedBuffer = buildFeedBuffer(fixedNowSeconds);
-  const { context, document, fetchCount } = createSandbox(feedBuffer);
+  const { context, document, feedFetchCount, stopsFetchCount } =
+    createSandbox(feedBuffer);
 
   vm.runInNewContext(script, context, { filename: "bundle.js" });
 
   await waitForRender(document);
 
   assert.equal(
-    fetchCount(),
+    stopsFetchCount(),
+    1,
+    "stops csv fetched once"
+  );
+
+  assert.equal(
+    feedFetchCount(),
     1,
     "initial load should request the feed once"
   );
 
   const statusText = document.get("#status").textContent ?? "";
+  assert.ok(
+    statusText.includes("Greenpoint Av"),
+    "displays current stop name"
+  );
   assert.ok(statusText.includes("Feed age: just now"), "shows feed age");
   assert.ok(
     statusText.includes("Showing 3 arrivals"),
@@ -213,7 +273,27 @@ test("renders arrivals from bundled app and refreshes", async () => {
   assert.ok(listsHtml.includes("in 2 min"), "renders relative time");
   assert.ok(listsHtml.includes("next in 3m"), "renders headway text");
 
+  assert.equal(
+    document.get("#stop-select").value,
+    "G26",
+    "defaults to Greenpoint stop"
+  );
+  assert.ok(
+    document.get("#stop-select").innerHTML.includes("G26"),
+    "dropdown limited to current stops"
+  );
+  assert.equal(
+    document.get("#stop-name").textContent,
+    "Greenpoint Av",
+    "header shows current stop name"
+  );
+  assert.equal(
+    context.location.hash,
+    "#G26",
+    "url hash synced to selected stop"
+  );
+
   document.get("#refresh").click();
-  await waitForFetchCount(fetchCount, 2);
-  assert.equal(fetchCount(), 2, "manual refresh should fetch again");
+  await waitForFetchCount(feedFetchCount, 2);
+  assert.equal(feedFetchCount(), 2, "manual refresh should fetch again");
 });

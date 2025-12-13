@@ -30,6 +30,34 @@ header {
   flex-wrap: wrap;
 }
 
+.controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 220px;
+}
+
+.label {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+select {
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  padding: 10px 12px;
+  font-size: 1rem;
+  background: white;
+  min-width: 220px;
+}
+
 h1 {
   font-size: 2.2rem;
   margin: 4px 0;
