@@ -268,25 +268,22 @@ function parseFeed(
 function render(arrivals: ArrivalGroup, meta: FeedMeta) {
   if (!statusEl || !listsEl) return;
 
-  const total =
-    arrivals.Northbound.length +
-    arrivals.Southbound.length +
-    arrivals.Other.length;
-
-  statusEl.className = "status";
-  const stopName = currentStopName();
-  statusEl.textContent =
-    total === 0
-      ? `No arrivals found for ${stopName} right now.`
-      : `${stopName} • Feed age: ${meta.ageText} • Showing ${total} arrival${
-          total === 1 ? "" : "s"
-        }`;
-
   const cards: Array<{ title: string; icon: string; items: Arrival[] }> = [
     { title: "Northbound", icon: "⬆️", items: arrivals.Northbound.slice(0, 3) },
     { title: "Southbound", icon: "⬇️", items: arrivals.Southbound.slice(0, 3) },
     { title: "Other", icon: "⬜", items: arrivals.Other.slice(0, 3) }
   ];
+
+  const visibleTotal = cards.reduce((sum, card) => sum + card.items.length, 0);
+
+  statusEl.className = "status";
+  const stopName = currentStopName();
+  statusEl.textContent =
+    visibleTotal === 0
+      ? `No arrivals found for ${stopName} right now.`
+      : `${stopName} • Feed age: ${meta.ageText} • Showing ${visibleTotal} arrival${
+          visibleTotal === 1 ? "" : "s"
+        }`;
 
   listsEl.innerHTML = cards
     .filter((c) => c.items.length > 0)
