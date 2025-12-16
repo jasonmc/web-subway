@@ -270,17 +270,11 @@ function parseFeed(
   };
 }
 
-function updateStatusText(visibleTotal: number, headerTimestampMs: number | null) {
+function updateStatusText(_visibleTotal: number, headerTimestampMs: number | null) {
   if (!statusEl) return;
   statusEl.className = "status";
-  const stopName = currentStopName();
   const ageText = headerTimestampMs ? formatAge(new Date(headerTimestampMs)) : "unknown";
-  statusEl.textContent =
-    visibleTotal === 0
-      ? `No arrivals found for ${stopName} right now.`
-      : `${stopName} • Feed age: ${ageText} • Showing ${visibleTotal} arrival${
-          visibleTotal === 1 ? "" : "s"
-        }`;
+  statusEl.textContent = `Feed age: ${ageText}`;
 }
 
 function render(arrivals: ArrivalGroup, meta: FeedMeta) {
@@ -330,7 +324,7 @@ function render(arrivals: ArrivalGroup, meta: FeedMeta) {
 
   if (listsEl.innerHTML.trim() === "") {
     listsEl.innerHTML =
-      `<article class="card"><p class="meta">No arrivals for ${currentStopName()} in the feed.</p></article>`;
+      `<article class="card"><p class="meta">No arrivals in the feed.</p></article>`;
   }
 }
 
