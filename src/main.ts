@@ -35,6 +35,7 @@ let fetching = false;
 let selectedStopPrefix = DEFAULT_STOP_ID_PREFIX;
 let lastFeedTimestampMs: number | null = null;
 let lastVisibleTotal = 0;
+let lastRenderedStops: string[] = [];
 
 type StopOption = { id: string; name: string };
 
@@ -129,6 +130,14 @@ function updateStopLabel() {
   if (stopNameEl) {
     stopNameEl.textContent = currentStopName();
   }
+}
+
+function idsEqual(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }
 
 function syncStopParam() {
@@ -366,17 +375,24 @@ function updateStopSelect(available?: Set<string>) {
       ? stopOptions.filter((s) => available.has(s.id))
       : stopOptions;
 
-  stopSelect.innerHTML = filtered
-    .map(
-      (stop) =>
-        `<option value="${stop.id}" ${
-          stop.id === selectedStopPrefix ? "selected" : ""
-        }>${stop.name}</option>`
-    )
-    .join("");
+  const ids = filtered.map((s) => s.id);
+  let needsUpdate = !idsEqual(ids, lastRenderedStops);
 
   if (!filtered.some((s) => s.id === selectedStopPrefix) && filtered[0]) {
     selectedStopPrefix = filtered[0].id;
+    needsUpdate = true;
+  }
+
+  if (needsUpdate) {
+    stopSelect.innerHTML = filtered
+      .map(
+        (stop) =>
+          `<option value="${stop.id}" ${
+            stop.id === selectedStopPrefix ? "selected" : ""
+          }>${stop.name}</option>`
+      )
+      .join("");
+    lastRenderedStops = ids;
   }
 
   stopSelect.value = selectedStopPrefix;
