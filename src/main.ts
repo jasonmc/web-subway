@@ -21,7 +21,7 @@ type Arrival = {
 type ArrivalGroup = Record<Direction, Arrival[]>;
 
 type FeedMeta = {
-  ageText: string;
+  headerTimestampMs: number | null;
 };
 
 const statusEl = document.querySelector<HTMLElement>("#status");
@@ -30,8 +30,11 @@ const stopSelect = document.querySelector<HTMLSelectElement>("#stop-select");
 const refreshBtn = document.querySelector<HTMLButtonElement>("#refresh");
 const stopNameEl = document.querySelector<HTMLElement>("#stop-name");
 let refreshTimer: number | undefined;
+let ageTimer: number | undefined;
 let fetching = false;
 let selectedStopPrefix = DEFAULT_STOP_ID_PREFIX;
+let lastFeedTimestampMs: number | null = null;
+let lastVisibleTotal = 0;
 
 type StopOption = { id: string; name: string };
 
@@ -183,8 +186,10 @@ function formatRelative(target: Date): string {
 function formatAge(target: Date): string {
   const now = new Date();
   const diffMs = now.getTime() - target.getTime();
-  const diffMin = Math.round(diffMs / 60000);
-  if (diffMin <= 0) return "just now";
+  const diffSec = Math.round(diffMs / 1000);
+  if (diffSec <= 0) return "just now";
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.round(diffSec / 60);
   if (diffMin === 1) return "1 min ago";
   if (diffMin < 60) return `${diffMin} min ago`;
   const hours = Math.floor(diffMin / 60);
@@ -212,7 +217,7 @@ function parseFeed(
   const other: Arrival[] = [];
 
   const headerTs = toInt(feed.header?.timestamp ?? undefined) ?? null;
-  const ageText = headerTs ? formatAge(new Date(headerTs * 1000)) : "unknown";
+  const headerTimestampMs = headerTs ? headerTs * 1000 : null;
 
   for (const entity of feed.entity) {
     const tripUpdate = entity.tripUpdate;
@@ -261,13 +266,25 @@ function parseFeed(
       Southbound: south,
       Other: other
     },
-    meta: { ageText }
+    meta: { headerTimestampMs }
   };
 }
 
-function render(arrivals: ArrivalGroup, meta: FeedMeta) {
-  if (!statusEl || !listsEl) return;
+function updateStatusText(visibleTotal: number, headerTimestampMs: number | null) {
+  if (!statusEl) return;
+  statusEl.className = "status";
+  const stopName = currentStopName();
+  const ageText = headerTimestampMs ? formatAge(new Date(headerTimestampMs)) : "unknown";
+  statusEl.textContent =
+    visibleTotal === 0
+      ? `No arrivals found for ${stopName} right now.`
+      : `${stopName} • Feed age: ${ageText} • Showing ${visibleTotal} arrival${
+          visibleTotal === 1 ? "" : "s"
+        }`;
+}
 
+function render(arrivals: ArrivalGroup, meta: FeedMeta) {
+  if (!listsEl) return;
   const cards: Array<{ title: string; icon: string; items: Arrival[] }> = [
     { title: "Northbound", icon: "⬆️", items: arrivals.Northbound.slice(0, 3) },
     { title: "Southbound", icon: "⬇️", items: arrivals.Southbound.slice(0, 3) },
@@ -275,15 +292,10 @@ function render(arrivals: ArrivalGroup, meta: FeedMeta) {
   ];
 
   const visibleTotal = cards.reduce((sum, card) => sum + card.items.length, 0);
+  lastVisibleTotal = visibleTotal;
+  lastFeedTimestampMs = meta.headerTimestampMs;
 
-  statusEl.className = "status";
-  const stopName = currentStopName();
-  statusEl.textContent =
-    visibleTotal === 0
-      ? `No arrivals found for ${stopName} right now.`
-      : `${stopName} • Feed age: ${meta.ageText} • Showing ${visibleTotal} arrival${
-          visibleTotal === 1 ? "" : "s"
-        }`;
+  updateStatusText(visibleTotal, meta.headerTimestampMs);
 
   listsEl.innerHTML = cards
     .filter((c) => c.items.length > 0)
@@ -338,6 +350,17 @@ function scheduleRefresh(intervalMs = 5000) {
   }
   refreshTimer = window.setInterval(() => {
     void load(false);
+  }, intervalMs);
+}
+
+function scheduleAgeTicker(intervalMs = 1000) {
+  if (ageTimer) {
+    clearInterval(ageTimer);
+  }
+  ageTimer = window.setInterval(() => {
+    if (lastFeedTimestampMs !== null) {
+      updateStatusText(lastVisibleTotal, lastFeedTimestampMs);
+    }
   }, intervalMs);
 }
 
@@ -427,6 +450,7 @@ void (async () => {
     syncStopParam();
     await load();
     scheduleRefresh();
+    scheduleAgeTicker();
   } catch (err) {
     console.error(err);
     setError("Failed to load stops list.");
