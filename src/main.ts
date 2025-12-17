@@ -8,6 +8,32 @@ const DEFAULT_FEED_URL =
   "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g";
 const DEFAULT_STOP_ID_PREFIX = "G26";
 const STOP_SUFFIX_RE = /[NS]$/;
+const PREFERRED_STOP_ORDER = [
+  "F27",
+  "F26",
+  "F25",
+  "F24",
+  "F23",
+  "F22",
+  "F21",
+  "F20",
+  "A42",
+  "G36",
+  "G35",
+  "G34",
+  "G33",
+  "G32",
+  "G31",
+  "G30",
+  "G29",
+  "G28",
+  "G26",
+  "G24",
+  "G22"
+];
+const PREFERRED_STOP_INDEX = new Map(
+  PREFERRED_STOP_ORDER.map((id, idx) => [id, idx])
+);
 
 type Direction = "Northbound" | "Southbound" | "Other";
 
@@ -36,6 +62,7 @@ let selectedStopPrefix = DEFAULT_STOP_ID_PREFIX;
 let lastFeedTimestampMs: number | null = null;
 let lastVisibleTotal = 0;
 let lastRenderedStops: string[] = [];
+let stopLookup: Map<string, StopOption> = new Map();
 
 type StopOption = { id: string; name: string };
 
@@ -108,6 +135,7 @@ async function loadStopsCsv(): Promise<string> {
 async function initStops() {
   const csv = await loadStopsCsv();
   stopOptions = parseStops(csv);
+  stopLookup = new Map(stopOptions.map((s) => [s.id, s]));
   defaultStop =
     stopOptions.find((s) => s.id === DEFAULT_STOP_ID_PREFIX) ??
     stopOptions[0] ??
@@ -154,7 +182,7 @@ function stopIdPrefixOf(stopId: string): string {
   return stopId.replace(STOP_SUFFIX_RE, "");
 }
 
-function stopsWithArrivals(feed: transit_realtime.FeedMessage): Set<string> {
+function stopsInFeed(feed: transit_realtime.FeedMessage): Set<string> {
   const ids = new Set<string>();
   for (const entity of feed.entity) {
     const updates = entity.tripUpdate?.stopTimeUpdate ?? [];
@@ -367,24 +395,32 @@ function scheduleAgeTicker(intervalMs = 1000) {
   }, intervalMs);
 }
 
-function updateStopSelect(available?: Set<string>) {
+function updateStopSelect(availableOrder?: string[]) {
   if (!stopSelect) return;
 
-  const filtered =
-    available && available.size > 0
-      ? stopOptions.filter((s) => available.has(s.id))
-      : stopOptions;
+  const availableSet =
+    availableOrder && availableOrder.length > 0
+      ? new Set(availableOrder)
+      : undefined;
 
-  const ids = filtered.map((s) => s.id);
-  let needsUpdate = !idsEqual(ids, lastRenderedStops);
+  const idsToRender = PREFERRED_STOP_ORDER.filter((id) =>
+    availableSet ? availableSet.has(id) : true
+  );
 
-  if (!filtered.some((s) => s.id === selectedStopPrefix) && filtered[0]) {
-    selectedStopPrefix = filtered[0].id;
+  const finalIds = idsToRender.length > 0 ? idsToRender : PREFERRED_STOP_ORDER;
+  const optionsToRender = finalIds.map(
+    (id) => stopLookup.get(id) ?? { id, name: id }
+  );
+
+  let needsUpdate = !idsEqual(finalIds, lastRenderedStops);
+
+  if (!optionsToRender.some((s) => s.id === selectedStopPrefix) && optionsToRender[0]) {
+    selectedStopPrefix = optionsToRender[0].id;
     needsUpdate = true;
   }
 
   if (needsUpdate) {
-    stopSelect.innerHTML = filtered
+    stopSelect.innerHTML = optionsToRender
       .map(
         (stop) =>
           `<option value="${stop.id}" ${
@@ -392,7 +428,7 @@ function updateStopSelect(available?: Set<string>) {
           }>${stop.name}</option>`
       )
       .join("");
-    lastRenderedStops = ids;
+    lastRenderedStops = finalIds;
   }
 
   stopSelect.value = selectedStopPrefix;
@@ -429,9 +465,9 @@ async function load(showLoading = true) {
 
     const buf = await response.arrayBuffer();
     const feed = transit_realtime.FeedMessage.decode(new Uint8Array(buf));
-    const availableStops = stopsWithArrivals(feed);
+    const availableStops = stopsInFeed(feed);
     if (availableStops.size > 0) {
-      updateStopSelect(availableStops);
+      updateStopSelect(Array.from(availableStops));
       updateStopLabel();
       syncStopParam();
     }
