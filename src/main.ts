@@ -474,9 +474,13 @@ async function load(showLoading = true) {
     const { arrivals, meta } = parseFeed(feed, selectedStopPrefix);
     render(arrivals, meta);
   } catch (err) {
+    // Do not clear existing display; only report the error.
     const message =
       err instanceof Error ? err.message : "Failed to load arrivals.";
-    setError(message);
+    if (statusEl) {
+      statusEl.className = "status error";
+      statusEl.textContent = message;
+    }
     console.error(err);
   } finally {
     fetching = false;

@@ -123,6 +123,7 @@ function createSandbox(feedBuffer) {
   let feedFetchCount = 0;
   let stopsFetchCount = 0;
   let timeouts = 0;
+  let failNextFeed = false;
 
   const fetchMock = async (url) => {
     // First fetch is always the stops CSV; subsequent fetches are the feed.
@@ -133,6 +134,10 @@ function createSandbox(feedBuffer) {
       return new Response(bytes);
     }
     feedFetchCount += 1;
+    if (failNextFeed) {
+      failNextFeed = false;
+      return new Response("fail", { status: 500, statusText: "fail" });
+    }
     return new Response(feedBuffer);
   };
 
@@ -213,7 +218,10 @@ function createSandbox(feedBuffer) {
     context,
     document,
     feedFetchCount: () => feedFetchCount,
-    stopsFetchCount: () => stopsFetchCount
+    stopsFetchCount: () => stopsFetchCount,
+    failNextFeed: () => {
+      failNextFeed = true;
+    }
   };
 }
 
@@ -238,7 +246,7 @@ test("renders arrivals from bundled app and refreshes", async () => {
   const html = fs.readFileSync(distIndexPath, "utf8");
   const script = extractInlineModule(html);
   const feedBuffer = buildFeedBuffer(fixedNowSeconds);
-  const { context, document, feedFetchCount, stopsFetchCount } =
+  const { context, document, feedFetchCount, stopsFetchCount, failNextFeed } =
     createSandbox(feedBuffer);
 
   vm.runInNewContext(script, context, { filename: "bundle.js" });
@@ -280,6 +288,21 @@ test("renders arrivals from bundled app and refreshes", async () => {
     "Greenpoint Av",
     "header shows current stop name"
   );
+
+  const beforeHtml = document.get("#lists").innerHTML;
+
+  // Simulate a failing fetch; the UI should keep the previous arrivals.
+  failNextFeed();
+  document.get("#refresh").click();
+  await waitForFetchCount(feedFetchCount, 2);
+
+  assert.equal(
+    document.get("#lists").innerHTML,
+    beforeHtml,
+    "keeps prior arrivals on fetch failure"
+  );
+  const statusAfterFail = document.get("#status").textContent ?? "";
+  assert.ok(statusAfterFail.length > 0, "status remains populated after fail");
   assert.equal(
     context.location.hash,
     "#G26",
