@@ -53,7 +53,6 @@ type FeedMeta = {
 const statusEl = document.querySelector<HTMLElement>("#status");
 const listsEl = document.querySelector<HTMLElement>("#lists");
 const stopSelect = document.querySelector<HTMLSelectElement>("#stop-select");
-const refreshBtn = document.querySelector<HTMLButtonElement>("#refresh");
 const stopNameEl = document.querySelector<HTMLElement>("#stop-name");
 let refreshTimer: number | undefined;
 let ageTimer: number | undefined;
@@ -486,11 +485,6 @@ async function load(showLoading = true) {
     fetching = false;
   }
 }
-
-refreshBtn?.addEventListener("click", () => {
-  void load();
-  scheduleRefresh();
-});
 
 void (async () => {
   try {

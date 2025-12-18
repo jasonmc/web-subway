@@ -38,7 +38,6 @@ class StubDocument {
     this.nodes = {
       "#status": new StubElement("div"),
       "#lists": new StubElement("div"),
-      "#refresh": new StubElement("button"),
       "#stop-select": new StubElement("select"),
       "#stop-name": new StubElement("span")
     };
@@ -221,6 +220,18 @@ function createSandbox(feedBuffer) {
     stopsFetchCount: () => stopsFetchCount,
     failNextFeed: () => {
       failNextFeed = true;
+    },
+    runIntervals: async (times = 1) => {
+      for (let i = 0; i < times; i += 1) {
+        for (const { fn } of intervals.values()) {
+          const result = fn();
+          if (result instanceof Promise) {
+            await result;
+          }
+        }
+        // Give async callbacks time to finish before next tick.
+        await new Promise((resolve) => setTimeout(resolve, baseInterval));
+      }
     }
   };
 }
@@ -246,8 +257,14 @@ test("renders arrivals from bundled app and refreshes", async () => {
   const html = fs.readFileSync(distIndexPath, "utf8");
   const script = extractInlineModule(html);
   const feedBuffer = buildFeedBuffer(fixedNowSeconds);
-  const { context, document, feedFetchCount, stopsFetchCount, failNextFeed } =
-    createSandbox(feedBuffer);
+  const {
+    context,
+    document,
+    feedFetchCount,
+    stopsFetchCount,
+    failNextFeed,
+    runIntervals
+  } = createSandbox(feedBuffer);
 
   vm.runInNewContext(script, context, { filename: "bundle.js" });
 
@@ -293,7 +310,7 @@ test("renders arrivals from bundled app and refreshes", async () => {
 
   // Simulate a failing fetch; the UI should keep the previous arrivals.
   failNextFeed();
-  document.get("#refresh").click();
+  await runIntervals();
   await waitForFetchCount(feedFetchCount, 2);
 
   assert.equal(
@@ -309,7 +326,7 @@ test("renders arrivals from bundled app and refreshes", async () => {
     "url hash synced to selected stop"
   );
 
-  document.get("#refresh").click();
-  await waitForFetchCount(feedFetchCount, 2);
-  assert.equal(feedFetchCount(), 2, "manual refresh should fetch again");
+  await runIntervals(2);
+  await waitForFetchCount(feedFetchCount, 4);
+  assert.equal(feedFetchCount(), 4, "scheduled refresh should fetch again");
 });
