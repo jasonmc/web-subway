@@ -15,6 +15,30 @@ import {
   updateStopSelect
 } from "./ui";
 
+async function fetchFeed(): Promise<ArrayBuffer> {
+  const feedUrl = import.meta.env.VITE_MTA_FEED_URL ?? DEFAULT_FEED_URL;
+  const response = await fetch(feedUrl, { mode: "cors" });
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+  }
+  return response.arrayBuffer();
+}
+
+function updateFeedState(meta: { headerTimestampMs: number | null }) {
+  state.lastFeedTimestampMs = meta.headerTimestampMs;
+}
+
+function updateVisibleTotal(arrivals: {
+  Northbound: Array<unknown>;
+  Southbound: Array<unknown>;
+  Other: Array<unknown>;
+}) {
+  state.lastVisibleTotal =
+    Math.min(arrivals.Northbound.length, 3) +
+    Math.min(arrivals.Southbound.length, 3) +
+    Math.min(arrivals.Other.length, 3);
+}
+
 async function load(showLoading = true) {
   if (state.fetching) return;
   state.fetching = true;
@@ -23,26 +47,15 @@ async function load(showLoading = true) {
       setStatusText("Loading…");
     }
 
-    const feedUrl = import.meta.env.VITE_MTA_FEED_URL ?? DEFAULT_FEED_URL;
-
-    const response = await fetch(feedUrl, { mode: "cors" });
-    if (!response.ok) {
-      throw new Error(`Request failed: ${response.status} ${response.statusText}`);
-    }
-
-    const buf = await response.arrayBuffer();
+    const buf = await fetchFeed();
     const feed = decodeFeed(buf);
     const availableStops = stopsInFeed(feed);
     if (availableStops.size > 0) {
       updateStopSelect(Array.from(availableStops));
     }
     const { arrivals, meta } = parseFeed(feed, state.selectedStopPrefix);
-    const visibleTotal =
-      Math.min(arrivals.Northbound.length, 3) +
-      Math.min(arrivals.Southbound.length, 3) +
-      Math.min(arrivals.Other.length, 3);
-    state.lastVisibleTotal = visibleTotal;
-    state.lastFeedTimestampMs = meta.headerTimestampMs;
+    updateVisibleTotal(arrivals);
+    updateFeedState(meta);
     render(arrivals, meta);
   } catch (err) {
     // Do not clear existing display; only report the error.
