@@ -8,6 +8,10 @@ const listsEl = document.querySelector<HTMLElement>("#lists");
 const stopSelect = document.querySelector<HTMLSelectElement>("#stop-select");
 const stopNameEl = document.querySelector<HTMLElement>("#stop-name");
 
+if (!statusEl || !listsEl || !stopSelect || !stopNameEl) {
+  throw new Error("Missing required UI elements.");
+}
+
 function syncStopParam() {
   try {
     const url = new URL(window.location.href);
@@ -19,7 +23,6 @@ function syncStopParam() {
 }
 
 export function setStatusText(text: string, options: { error?: boolean } = {}) {
-  if (!statusEl) return;
   statusEl.className = options.error ? "status error" : "status";
   statusEl.textContent = text;
 }
@@ -35,7 +38,6 @@ export function updateStatusText(
 }
 
 export function render(arrivals: ArrivalGroup, meta: FeedMeta) {
-  if (!listsEl) return;
   const cards: Array<{ title: string; icon: string; items: Arrival[] }> = [
     { title: "Northbound", icon: "⬆️", items: arrivals.Northbound.slice(0, 3) },
     { title: "Southbound", icon: "⬇️", items: arrivals.Southbound.slice(0, 3) },
@@ -87,23 +89,17 @@ export function render(arrivals: ArrivalGroup, meta: FeedMeta) {
 
 export function setError(message: string) {
   setStatusText(message, { error: true });
-  if (listsEl) {
-    listsEl.innerHTML = "";
-  }
+  listsEl.innerHTML = "";
 }
 
 export function setSelectedStop(id: string) {
   state.selectedStopPrefix = id;
-  if (stopSelect) stopSelect.value = id;
-  if (stopNameEl) {
-    stopNameEl.textContent = stopLabel(id);
-  }
+  stopSelect.value = id;
+  stopNameEl.textContent = stopLabel(id);
   syncStopParam();
 }
 
 export function updateStopSelect(availableOrder?: string[]) {
-  if (!stopSelect) return;
-
   const availableSet =
     availableOrder && availableOrder.length > 0
       ? new Set(availableOrder)
@@ -143,7 +139,6 @@ export function updateStopSelect(availableOrder?: string[]) {
 }
 
 export function initStopSelect(onChange: () => void) {
-  if (!stopSelect) return;
   updateStopSelect();
   stopSelect.addEventListener("change", () => {
     setSelectedStop(stopSelect.value);
