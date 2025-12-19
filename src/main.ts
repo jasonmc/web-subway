@@ -62,7 +62,7 @@ const state = {
   selectedStopPrefix: DEFAULT_STOP_ID_PREFIX,
   lastFeedTimestampMs: null as number | null,
   lastVisibleTotal: 0,
-  lastRenderedStops: [] as string[],
+  lastRenderedStopsKey: "",
   stopLookup: new Map<string, StopOption>(),
   stopOptions: [] as StopOption[],
   defaultStop: {
@@ -159,14 +159,6 @@ function updateStopLabel() {
   if (stopNameEl) {
     stopNameEl.textContent = currentStopName();
   }
-}
-
-function idsEqual(a: string[], b: string[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
 }
 
 function syncStopParam() {
@@ -424,7 +416,8 @@ function updateStopSelect(availableOrder?: string[]) {
     (id) => state.stopLookup.get(id) ?? { id, name: id }
   );
 
-  let needsUpdate = !idsEqual(finalIds, state.lastRenderedStops);
+  const nextKey = finalIds.join(",");
+  let needsUpdate = nextKey !== state.lastRenderedStopsKey;
 
   let nextSelectedId = state.selectedStopPrefix;
   if (!optionsToRender.some((s) => s.id === nextSelectedId) && optionsToRender[0]) {
@@ -441,7 +434,7 @@ function updateStopSelect(availableOrder?: string[]) {
           }>${stop.name}</option>`
       )
       .join("");
-    state.lastRenderedStops = finalIds;
+    state.lastRenderedStopsKey = nextKey;
   }
 
   stopSelect.value = nextSelectedId;
