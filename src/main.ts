@@ -54,14 +54,22 @@ const statusEl = document.querySelector<HTMLElement>("#status");
 const listsEl = document.querySelector<HTMLElement>("#lists");
 const stopSelect = document.querySelector<HTMLSelectElement>("#stop-select");
 const stopNameEl = document.querySelector<HTMLElement>("#stop-name");
-let refreshTimer: number | undefined;
-let ageTimer: number | undefined;
-let fetching = false;
-let selectedStopPrefix = DEFAULT_STOP_ID_PREFIX;
-let lastFeedTimestampMs: number | null = null;
-let lastVisibleTotal = 0;
-let lastRenderedStops: string[] = [];
-let stopLookup: Map<string, StopOption> = new Map();
+
+const state = {
+  refreshTimer: undefined as number | undefined,
+  ageTimer: undefined as number | undefined,
+  fetching: false,
+  selectedStopPrefix: DEFAULT_STOP_ID_PREFIX,
+  lastFeedTimestampMs: null as number | null,
+  lastVisibleTotal: 0,
+  lastRenderedStops: [] as string[],
+  stopLookup: new Map<string, StopOption>(),
+  stopOptions: [] as StopOption[],
+  defaultStop: {
+    id: DEFAULT_STOP_ID_PREFIX,
+    name: "Default stop"
+  } as StopOption
+};
 
 type StopOption = { id: string; name: string };
 
@@ -99,12 +107,6 @@ function stopFromLocation(): string | null {
   }
 }
 
-let stopOptions: StopOption[] = [];
-let defaultStop: StopOption = {
-  id: DEFAULT_STOP_ID_PREFIX,
-  name: "Default stop"
-};
-
 async function loadStopsCsv(): Promise<string> {
   const response = await fetch(stopsCsvGzUrl);
   if (!response.ok) throw new Error(`Stops fetch failed: ${response.status}`);
@@ -133,23 +135,23 @@ async function loadStopsCsv(): Promise<string> {
 
 async function initStops() {
   const csv = await loadStopsCsv();
-  stopOptions = parseStops(csv);
-  stopLookup = new Map(stopOptions.map((s) => [s.id, s]));
-  defaultStop =
-    stopOptions.find((s) => s.id === DEFAULT_STOP_ID_PREFIX) ??
-    stopOptions[0] ??
+  state.stopOptions = parseStops(csv);
+  state.stopLookup = new Map(state.stopOptions.map((s) => [s.id, s]));
+  state.defaultStop =
+    state.stopOptions.find((s) => s.id === DEFAULT_STOP_ID_PREFIX) ??
+    state.stopOptions[0] ??
     { id: DEFAULT_STOP_ID_PREFIX, name: "Default stop" };
   const urlStop = stopFromLocation();
-  const validUrlStop = stopOptions.some((s) => s.id === urlStop)
+  const validUrlStop = state.stopOptions.some((s) => s.id === urlStop)
     ? urlStop
     : null;
-  selectedStopPrefix = validUrlStop ?? defaultStop.id;
+  state.selectedStopPrefix = validUrlStop ?? state.defaultStop.id;
 }
 
 function currentStopName(): string {
   return (
-    stopOptions.find((s) => s.id === selectedStopPrefix)?.name ??
-    `Stop ${selectedStopPrefix}`
+    state.stopOptions.find((s) => s.id === state.selectedStopPrefix)?.name ??
+    `Stop ${state.selectedStopPrefix}`
   );
 }
 
@@ -170,7 +172,7 @@ function idsEqual(a: string[], b: string[]): boolean {
 function syncStopParam() {
   try {
     const url = new URL(window.location.href);
-    url.hash = selectedStopPrefix;
+    url.hash = state.selectedStopPrefix;
     window.history.replaceState({}, "", url);
   } catch {
     // ignore if history/location not available
@@ -322,8 +324,8 @@ function render(arrivals: ArrivalGroup, meta: FeedMeta) {
   ];
 
   const visibleTotal = cards.reduce((sum, card) => sum + card.items.length, 0);
-  lastVisibleTotal = visibleTotal;
-  lastFeedTimestampMs = meta.headerTimestampMs;
+  state.lastVisibleTotal = visibleTotal;
+  state.lastFeedTimestampMs = meta.headerTimestampMs;
 
   updateStatusText(visibleTotal, meta.headerTimestampMs);
 
@@ -375,21 +377,21 @@ function setError(message: string) {
 }
 
 function scheduleRefresh(intervalMs = 5000) {
-  if (refreshTimer) {
-    clearInterval(refreshTimer);
+  if (state.refreshTimer) {
+    clearInterval(state.refreshTimer);
   }
-  refreshTimer = window.setInterval(() => {
+  state.refreshTimer = window.setInterval(() => {
     void load(false);
   }, intervalMs);
 }
 
 function scheduleAgeTicker(intervalMs = 1000) {
-  if (ageTimer) {
-    clearInterval(ageTimer);
+  if (state.ageTimer) {
+    clearInterval(state.ageTimer);
   }
-  ageTimer = window.setInterval(() => {
-    if (lastFeedTimestampMs !== null) {
-      updateStatusText(lastVisibleTotal, lastFeedTimestampMs);
+  state.ageTimer = window.setInterval(() => {
+    if (state.lastFeedTimestampMs !== null) {
+      updateStatusText(state.lastVisibleTotal, state.lastFeedTimestampMs);
     }
   }, intervalMs);
 }
@@ -408,13 +410,13 @@ function updateStopSelect(availableOrder?: string[]) {
 
   const finalIds = idsToRender.length > 0 ? idsToRender : PREFERRED_STOP_ORDER;
   const optionsToRender = finalIds.map(
-    (id) => stopLookup.get(id) ?? { id, name: id }
+    (id) => state.stopLookup.get(id) ?? { id, name: id }
   );
 
-  let needsUpdate = !idsEqual(finalIds, lastRenderedStops);
+  let needsUpdate = !idsEqual(finalIds, state.lastRenderedStops);
 
-  if (!optionsToRender.some((s) => s.id === selectedStopPrefix) && optionsToRender[0]) {
-    selectedStopPrefix = optionsToRender[0].id;
+  if (!optionsToRender.some((s) => s.id === state.selectedStopPrefix) && optionsToRender[0]) {
+    state.selectedStopPrefix = optionsToRender[0].id;
     needsUpdate = true;
   }
 
@@ -423,14 +425,14 @@ function updateStopSelect(availableOrder?: string[]) {
       .map(
         (stop) =>
           `<option value="${stop.id}" ${
-            stop.id === selectedStopPrefix ? "selected" : ""
+            stop.id === state.selectedStopPrefix ? "selected" : ""
           }>${stop.name}</option>`
       )
       .join("");
-    lastRenderedStops = finalIds;
+    state.lastRenderedStops = finalIds;
   }
 
-  stopSelect.value = selectedStopPrefix;
+  stopSelect.value = state.selectedStopPrefix;
   syncStopParam();
 }
 
@@ -438,7 +440,7 @@ function initStopSelect() {
   updateStopSelect();
 
   stopSelect.addEventListener("change", () => {
-    selectedStopPrefix = stopSelect.value;
+    state.selectedStopPrefix = stopSelect.value;
     updateStopLabel();
     syncStopParam();
     void load();
@@ -447,8 +449,8 @@ function initStopSelect() {
 }
 
 async function load(showLoading = true) {
-  if (fetching) return;
-  fetching = true;
+  if (state.fetching) return;
+  state.fetching = true;
   try {
     if (statusEl && showLoading) {
       statusEl.className = "status";
@@ -470,7 +472,7 @@ async function load(showLoading = true) {
       updateStopLabel();
       syncStopParam();
     }
-    const { arrivals, meta } = parseFeed(feed, selectedStopPrefix);
+    const { arrivals, meta } = parseFeed(feed, state.selectedStopPrefix);
     render(arrivals, meta);
   } catch (err) {
     // Do not clear existing display; only report the error.
@@ -482,7 +484,7 @@ async function load(showLoading = true) {
     }
     console.error(err);
   } finally {
-    fetching = false;
+    state.fetching = false;
   }
 }
 
