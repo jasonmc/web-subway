@@ -1,5 +1,5 @@
-import { formatAge, formatRelative, headway } from "./feed";
-import { PREFERRED_STOP_ORDER } from "./config";
+import { formatRelative, headway } from "./feed";
+import { ARRIVALS_PER_DIRECTION, PREFERRED_STOP_ORDER } from "./config";
 import { state, Arrival, ArrivalGroup, FeedMeta } from "./state";
 import { stopLabel } from "./stops";
 
@@ -27,21 +27,24 @@ export function setStatusText(text: string, options: { error?: boolean } = {}) {
   statusEl.textContent = text;
 }
 
-export function updateStatusText(headerTimestampMs: number | null) {
-  const ageText = headerTimestampMs
-    ? formatAge(new Date(headerTimestampMs))
-    : "unknown";
-  setStatusText(`Feed age: ${ageText}`);
-}
-
-export function render(arrivals: ArrivalGroup, meta: FeedMeta) {
+export function render(arrivals: ArrivalGroup, _meta: FeedMeta) {
   const cards: Array<{ title: string; icon: string; items: Arrival[] }> = [
-    { title: "Northbound", icon: "⬆️", items: arrivals.Northbound.slice(0, 3) },
-    { title: "Southbound", icon: "⬇️", items: arrivals.Southbound.slice(0, 3) },
-    { title: "Other", icon: "⬜", items: arrivals.Other.slice(0, 3) }
+    {
+      title: "Northbound",
+      icon: "⬆️",
+      items: arrivals.Northbound.slice(0, ARRIVALS_PER_DIRECTION)
+    },
+    {
+      title: "Southbound",
+      icon: "⬇️",
+      items: arrivals.Southbound.slice(0, ARRIVALS_PER_DIRECTION)
+    },
+    {
+      title: "Other",
+      icon: "⬜",
+      items: arrivals.Other.slice(0, ARRIVALS_PER_DIRECTION)
+    }
   ];
-
-  updateStatusText(meta.headerTimestampMs);
 
   listsEl.innerHTML = cards
     .filter((c) => c.items.length > 0)

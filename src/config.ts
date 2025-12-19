@@ -2,6 +2,7 @@ export const DEFAULT_FEED_URL =
   "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g";
 export const DEFAULT_STOP_ID_PREFIX = "G26";
 export const STOP_SUFFIX_RE = /[NS]$/;
+export const ARRIVALS_PER_DIRECTION = 3;
 export const PREFERRED_STOP_ORDER = [
   "F27",
   "F26",

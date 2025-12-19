@@ -1,6 +1,6 @@
 import "./style.css";
 
-import { DEFAULT_FEED_URL } from "./config";
+import { ARRIVALS_PER_DIRECTION, DEFAULT_FEED_URL } from "./config";
 import { decodeFeed, parseFeed, stopsInFeed } from "./feed";
 import { initStops } from "./stops";
 import { state } from "./state";
@@ -11,9 +11,10 @@ import {
   setError,
   setSelectedStop,
   setStatusText,
-  updateStatusText,
   updateStopSelect
 } from "./ui";
+import { formatAge } from "./feed";
+import { ArrivalGroup } from "./state";
 
 async function fetchFeed(): Promise<ArrayBuffer> {
   const feedUrl = import.meta.env.VITE_MTA_FEED_URL ?? DEFAULT_FEED_URL;
@@ -26,17 +27,25 @@ async function fetchFeed(): Promise<ArrayBuffer> {
 
 function updateFeedState(meta: { headerTimestampMs: number | null }) {
   state.lastFeedTimestampMs = meta.headerTimestampMs;
+  updateStatusFromTimestamp(meta.headerTimestampMs);
 }
 
-function updateVisibleTotal(arrivals: {
-  Northbound: Array<unknown>;
-  Southbound: Array<unknown>;
-  Other: Array<unknown>;
-}) {
+function statusTextForTimestamp(headerTimestampMs: number | null) {
+  const ageText = headerTimestampMs
+    ? formatAge(new Date(headerTimestampMs))
+    : "unknown";
+  return `Feed age: ${ageText}`;
+}
+
+function updateStatusFromTimestamp(headerTimestampMs: number | null) {
+  setStatusText(statusTextForTimestamp(headerTimestampMs));
+}
+
+function updateVisibleTotal(arrivals: ArrivalGroup) {
   state.lastVisibleTotal =
-    Math.min(arrivals.Northbound.length, 3) +
-    Math.min(arrivals.Southbound.length, 3) +
-    Math.min(arrivals.Other.length, 3);
+    Math.min(arrivals.Northbound.length, ARRIVALS_PER_DIRECTION) +
+    Math.min(arrivals.Southbound.length, ARRIVALS_PER_DIRECTION) +
+    Math.min(arrivals.Other.length, ARRIVALS_PER_DIRECTION);
 }
 
 async function load(showLoading = true) {
@@ -80,7 +89,7 @@ void (async () => {
     scheduleRefresh(load);
     scheduleAgeTicker(() => {
       if (state.lastFeedTimestampMs !== null) {
-        updateStatusText(state.lastFeedTimestampMs);
+        updateStatusFromTimestamp(state.lastFeedTimestampMs);
       }
     });
   } catch (err) {
