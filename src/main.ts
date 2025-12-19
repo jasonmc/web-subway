@@ -433,14 +433,7 @@ function updateStopSelect(availableOrder?: string[]) {
     state.lastRenderedStopsKey = nextKey;
   }
 
-  stopSelect.value = nextSelectedId;
-  const selectionChanged = nextSelectedId !== state.selectedStopPrefix;
-  state.selectedStopPrefix = nextSelectedId;
-  if (selectionChanged) {
-    setSelectedStop(nextSelectedId, { load: false });
-  } else {
-    syncStopParam();
-  }
+  setSelectedStop(nextSelectedId, { load: false });
 }
 
 function initStopSelect() {
