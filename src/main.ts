@@ -148,17 +148,11 @@ async function initStops() {
   state.selectedStopPrefix = validUrlStop ?? state.defaultStop.id;
 }
 
-function currentStopName(): string {
+function stopLabel(stopId: string): string {
   return (
-    state.stopOptions.find((s) => s.id === state.selectedStopPrefix)?.name ??
-    `Stop ${state.selectedStopPrefix}`
+    state.stopOptions.find((s) => s.id === stopId)?.name ??
+    `Stop ${stopId}`
   );
-}
-
-function updateStopLabel() {
-  if (stopNameEl) {
-    stopNameEl.textContent = currentStopName();
-  }
 }
 
 function syncStopParam() {
@@ -175,7 +169,9 @@ function setSelectedStop(id: string, options: { load?: boolean } = {}) {
   const { load: shouldLoad = true } = options;
   state.selectedStopPrefix = id;
   if (stopSelect) stopSelect.value = id;
-  updateStopLabel();
+  if (stopNameEl) {
+    stopNameEl.textContent = stopLabel(id);
+  }
   syncStopParam();
   if (shouldLoad) {
     void load();
