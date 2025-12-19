@@ -1,0 +1,85 @@
+import stopsCsvGzUrl from "../all_stops.csv.gz?url";
+import { DEFAULT_STOP_ID_PREFIX } from "./config";
+import { state, StopOption } from "./state";
+
+function parseStops(csv: string): StopOption[] {
+  const rows = csv.trim().split(/\r?\n/);
+  const [, ...dataRows] = rows;
+  const byId = new Map<string, StopOption>();
+
+  for (const row of dataRows) {
+    if (!row.trim()) continue;
+    const [stopId, stopName, , , locationType, parentStation] = row.split(",");
+    if (!stopId || !stopName) continue;
+
+    const baseId =
+      parentStation ||
+      (locationType === "1" ? stopId : stopId.replace(/[NS]$/, ""));
+
+    if (!byId.has(baseId)) {
+      byId.set(baseId, { id: baseId, name: stopName });
+    }
+  }
+
+  return Array.from(byId.values()).sort((a, b) =>
+    a.name.localeCompare(b.name, "en")
+  );
+}
+
+function stopFromLocation(): string | null {
+  try {
+    const url = new URL(window.location.href);
+    const hash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+    return hash || null;
+  } catch {
+    return null;
+  }
+}
+
+async function loadStopsCsv(): Promise<string> {
+  const response = await fetch(stopsCsvGzUrl);
+  if (!response.ok) throw new Error(`Stops fetch failed: ${response.status}`);
+  const buf = await response.arrayBuffer();
+
+  const tryDecompress = async () => {
+    if (!("DecompressionStream" in window)) {
+      throw new Error("DecompressionStream not supported in this browser.");
+    }
+    const stream = new Blob([buf]).stream().pipeThrough(
+      new DecompressionStream("gzip")
+    );
+    return new Response(stream).text();
+  };
+
+  let text: string;
+  try {
+    text = await tryDecompress();
+  } catch {
+    text = new TextDecoder().decode(buf);
+  }
+
+  if (!text.includes(",")) throw new Error("Invalid stops csv");
+  return text;
+}
+
+export async function initStops() {
+  const csv = await loadStopsCsv();
+  state.stopOptions = parseStops(csv);
+  state.stopLookup = new Map(state.stopOptions.map((s) => [s.id, s]));
+  state.defaultStop =
+    state.stopOptions.find((s) => s.id === DEFAULT_STOP_ID_PREFIX) ??
+    state.stopOptions[0] ??
+    { id: DEFAULT_STOP_ID_PREFIX, name: "Default stop" };
+  const urlStop = stopFromLocation();
+  const validUrlStop = state.stopOptions.some((s) => s.id === urlStop)
+    ? urlStop
+    : null;
+  state.selectedStopPrefix = validUrlStop ?? state.defaultStop.id;
+}
+
+export function stopLabel(stopId: string): string {
+  return (
+    state.stopOptions.find((s) => s.id === stopId)?.name ??
+    `Stop ${stopId}`
+  );
+}

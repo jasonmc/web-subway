@@ -1,0 +1,152 @@
+import { formatAge, formatRelative, headway } from "./feed";
+import { PREFERRED_STOP_ORDER } from "./config";
+import { state, Arrival, ArrivalGroup, FeedMeta } from "./state";
+import { stopLabel } from "./stops";
+
+const statusEl = document.querySelector<HTMLElement>("#status");
+const listsEl = document.querySelector<HTMLElement>("#lists");
+const stopSelect = document.querySelector<HTMLSelectElement>("#stop-select");
+const stopNameEl = document.querySelector<HTMLElement>("#stop-name");
+
+function syncStopParam() {
+  try {
+    const url = new URL(window.location.href);
+    url.hash = state.selectedStopPrefix;
+    window.history.replaceState({}, "", url);
+  } catch {
+    // ignore if history/location not available
+  }
+}
+
+export function setStatusText(text: string, options: { error?: boolean } = {}) {
+  if (!statusEl) return;
+  statusEl.className = options.error ? "status error" : "status";
+  statusEl.textContent = text;
+}
+
+export function updateStatusText(
+  _visibleTotal: number,
+  headerTimestampMs: number | null
+) {
+  const ageText = headerTimestampMs
+    ? formatAge(new Date(headerTimestampMs))
+    : "unknown";
+  setStatusText(`Feed age: ${ageText}`);
+}
+
+export function render(arrivals: ArrivalGroup, meta: FeedMeta) {
+  if (!listsEl) return;
+  const cards: Array<{ title: string; icon: string; items: Arrival[] }> = [
+    { title: "Northbound", icon: "⬆️", items: arrivals.Northbound.slice(0, 3) },
+    { title: "Southbound", icon: "⬇️", items: arrivals.Southbound.slice(0, 3) },
+    { title: "Other", icon: "⬜", items: arrivals.Other.slice(0, 3) }
+  ];
+
+  const visibleTotal = cards.reduce((sum, card) => sum + card.items.length, 0);
+  state.lastVisibleTotal = visibleTotal;
+  state.lastFeedTimestampMs = meta.headerTimestampMs;
+
+  updateStatusText(visibleTotal, meta.headerTimestampMs);
+
+  listsEl.innerHTML = cards
+    .filter((c) => c.items.length > 0)
+    .map(
+      (card) => `
+      <article class="card">
+        <h2>${card.icon} ${card.title}</h2>
+        ${card.items
+          .map((arrival, idx) => {
+            const next = card.items[idx + 1];
+            return `
+              <div class="arrival">
+                <div>
+                  <span class="route">${arrival.route}</span>
+                  <span class="meta"> ${formatRelative(arrival.time)}${headway(
+                    arrival,
+                    next
+                  )}</span>
+                </div>
+                <span class="time">${arrival.time.toLocaleTimeString([], {
+                  hour: "numeric",
+                  minute: "2-digit"
+                })}</span>
+              </div>
+            `;
+          })
+          .join("")}
+      </article>
+    `
+    )
+    .join("");
+
+  if (listsEl.innerHTML.trim() === "") {
+    listsEl.innerHTML =
+      `<article class="card"><p class="meta">No arrivals in the feed.</p></article>`;
+  }
+}
+
+export function setError(message: string) {
+  setStatusText(message, { error: true });
+  if (listsEl) {
+    listsEl.innerHTML = "";
+  }
+}
+
+export function setSelectedStop(id: string) {
+  state.selectedStopPrefix = id;
+  if (stopSelect) stopSelect.value = id;
+  if (stopNameEl) {
+    stopNameEl.textContent = stopLabel(id);
+  }
+  syncStopParam();
+}
+
+export function updateStopSelect(availableOrder?: string[]) {
+  if (!stopSelect) return;
+
+  const availableSet =
+    availableOrder && availableOrder.length > 0
+      ? new Set(availableOrder)
+      : undefined;
+
+  const idsToRender = PREFERRED_STOP_ORDER.filter((id) =>
+    availableSet ? availableSet.has(id) : true
+  );
+
+  const finalIds = idsToRender.length > 0 ? idsToRender : PREFERRED_STOP_ORDER;
+  const optionsToRender = finalIds.map(
+    (id) => state.stopLookup.get(id) ?? { id, name: id }
+  );
+
+  const nextKey = finalIds.join(",");
+  let needsUpdate = nextKey !== state.lastRenderedStopsKey;
+
+  let nextSelectedId = state.selectedStopPrefix;
+  if (!optionsToRender.some((s) => s.id === nextSelectedId) && optionsToRender[0]) {
+    nextSelectedId = optionsToRender[0].id;
+    needsUpdate = true;
+  }
+
+  if (needsUpdate) {
+    stopSelect.innerHTML = optionsToRender
+      .map(
+        (stop) =>
+          `<option value="${stop.id}" ${
+            stop.id === nextSelectedId ? "selected" : ""
+          }>${stop.name}</option>`
+      )
+      .join("");
+    state.lastRenderedStopsKey = nextKey;
+  }
+
+  setSelectedStop(nextSelectedId);
+}
+
+export function initStopSelect(onChange: () => void) {
+  if (!stopSelect) return;
+  updateStopSelect();
+  stopSelect.addEventListener("change", () => {
+    setSelectedStop(stopSelect.value);
+    onChange();
+  });
+}
