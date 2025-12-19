@@ -179,6 +179,17 @@ function syncStopParam() {
   }
 }
 
+function setSelectedStop(id: string, options: { load?: boolean } = {}) {
+  const { load: shouldLoad = true } = options;
+  state.selectedStopPrefix = id;
+  if (stopSelect) stopSelect.value = id;
+  updateStopLabel();
+  syncStopParam();
+  if (shouldLoad) {
+    void load();
+  }
+}
+
 function stopIdPrefixOf(stopId: string): string {
   return stopId.replace(STOP_SUFFIX_RE, "");
 }
@@ -415,8 +426,9 @@ function updateStopSelect(availableOrder?: string[]) {
 
   let needsUpdate = !idsEqual(finalIds, state.lastRenderedStops);
 
-  if (!optionsToRender.some((s) => s.id === state.selectedStopPrefix) && optionsToRender[0]) {
-    state.selectedStopPrefix = optionsToRender[0].id;
+  let nextSelectedId = state.selectedStopPrefix;
+  if (!optionsToRender.some((s) => s.id === nextSelectedId) && optionsToRender[0]) {
+    nextSelectedId = optionsToRender[0].id;
     needsUpdate = true;
   }
 
@@ -425,25 +437,28 @@ function updateStopSelect(availableOrder?: string[]) {
       .map(
         (stop) =>
           `<option value="${stop.id}" ${
-            stop.id === state.selectedStopPrefix ? "selected" : ""
+            stop.id === nextSelectedId ? "selected" : ""
           }>${stop.name}</option>`
       )
       .join("");
     state.lastRenderedStops = finalIds;
   }
 
-  stopSelect.value = state.selectedStopPrefix;
-  syncStopParam();
+  stopSelect.value = nextSelectedId;
+  const selectionChanged = nextSelectedId !== state.selectedStopPrefix;
+  state.selectedStopPrefix = nextSelectedId;
+  if (selectionChanged) {
+    setSelectedStop(nextSelectedId, { load: false });
+  } else {
+    syncStopParam();
+  }
 }
 
 function initStopSelect() {
   updateStopSelect();
 
   stopSelect.addEventListener("change", () => {
-    state.selectedStopPrefix = stopSelect.value;
-    updateStopLabel();
-    syncStopParam();
-    void load();
+    setSelectedStop(stopSelect.value);
     scheduleRefresh();
   });
 }
@@ -469,8 +484,6 @@ async function load(showLoading = true) {
     const availableStops = stopsInFeed(feed);
     if (availableStops.size > 0) {
       updateStopSelect(Array.from(availableStops));
-      updateStopLabel();
-      syncStopParam();
     }
     const { arrivals, meta } = parseFeed(feed, state.selectedStopPrefix);
     render(arrivals, meta);
@@ -491,9 +504,8 @@ async function load(showLoading = true) {
 void (async () => {
   try {
     await initStops();
-    updateStopLabel();
     initStopSelect();
-    syncStopParam();
+    setSelectedStop(state.selectedStopPrefix, { load: false });
     await load();
     scheduleRefresh();
     scheduleAgeTicker();
