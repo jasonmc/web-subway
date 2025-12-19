@@ -37,6 +37,12 @@ async function load(showLoading = true) {
       updateStopSelect(Array.from(availableStops));
     }
     const { arrivals, meta } = parseFeed(feed, state.selectedStopPrefix);
+    const visibleTotal =
+      Math.min(arrivals.Northbound.length, 3) +
+      Math.min(arrivals.Southbound.length, 3) +
+      Math.min(arrivals.Other.length, 3);
+    state.lastVisibleTotal = visibleTotal;
+    state.lastFeedTimestampMs = meta.headerTimestampMs;
     render(arrivals, meta);
   } catch (err) {
     // Do not clear existing display; only report the error.
@@ -61,7 +67,7 @@ void (async () => {
     scheduleRefresh(load);
     scheduleAgeTicker(() => {
       if (state.lastFeedTimestampMs !== null) {
-        updateStatusText(state.lastVisibleTotal, state.lastFeedTimestampMs);
+        updateStatusText(state.lastFeedTimestampMs);
       }
     });
   } catch (err) {

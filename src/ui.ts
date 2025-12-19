@@ -27,10 +27,7 @@ export function setStatusText(text: string, options: { error?: boolean } = {}) {
   statusEl.textContent = text;
 }
 
-export function updateStatusText(
-  _visibleTotal: number,
-  headerTimestampMs: number | null
-) {
+export function updateStatusText(headerTimestampMs: number | null) {
   const ageText = headerTimestampMs
     ? formatAge(new Date(headerTimestampMs))
     : "unknown";
@@ -44,11 +41,7 @@ export function render(arrivals: ArrivalGroup, meta: FeedMeta) {
     { title: "Other", icon: "⬜", items: arrivals.Other.slice(0, 3) }
   ];
 
-  const visibleTotal = cards.reduce((sum, card) => sum + card.items.length, 0);
-  state.lastVisibleTotal = visibleTotal;
-  state.lastFeedTimestampMs = meta.headerTimestampMs;
-
-  updateStatusText(visibleTotal, meta.headerTimestampMs);
+  updateStatusText(meta.headerTimestampMs);
 
   listsEl.innerHTML = cards
     .filter((c) => c.items.length > 0)

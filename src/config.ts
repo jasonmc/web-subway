@@ -25,6 +25,3 @@ export const PREFERRED_STOP_ORDER = [
   "G24",
   "G22"
 ];
-export const PREFERRED_STOP_INDEX = new Map(
-  PREFERRED_STOP_ORDER.map((id, idx) => [id, idx])
-);
