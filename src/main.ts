@@ -64,6 +64,8 @@ async function load(showLoading = true) {
     }
     const { arrivals, meta } = parseFeed(feed, state.selectedStopPrefix);
     updateVisibleTotal(arrivals);
+    state.lastArrivals = arrivals;
+    state.lastFeedMeta = meta;
     updateFeedState(meta);
     render(arrivals, meta);
   } catch (err) {
@@ -90,6 +92,9 @@ void (async () => {
     scheduleAgeTicker(() => {
       if (state.lastFeedTimestampMs !== null) {
         updateStatusFromTimestamp(state.lastFeedTimestampMs);
+      }
+      if (state.lastArrivals && state.lastFeedMeta) {
+        render(state.lastArrivals, state.lastFeedMeta);
       }
     });
   } catch (err) {

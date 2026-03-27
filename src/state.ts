@@ -25,6 +25,8 @@ export const state = {
   lastFeedTimestampMs: null as number | null,
   lastVisibleTotal: 0,
   lastRenderedStopsKey: "",
+  lastArrivals: null as ArrivalGroup | null,
+  lastFeedMeta: null as FeedMeta | null,
   stopLookup: new Map<string, StopOption>(),
   stopOptions: [] as StopOption[],
   defaultStop: {

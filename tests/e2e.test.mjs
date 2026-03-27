@@ -123,6 +123,7 @@ function createSandbox(feedBuffer) {
   let stopsFetchCount = 0;
   let timeouts = 0;
   let failNextFeed = false;
+  let currentNowMs = fixedNowMs;
 
   const fetchMock = async (url) => {
     // First fetch is always the stops CSV; subsequent fetches are the feed.
@@ -145,14 +146,14 @@ function createSandbox(feedBuffer) {
   class FixedDate extends OriginalDate {
     constructor(value) {
       if (arguments.length === 0) {
-        super(fixedNowMs);
+        super(currentNowMs);
       } else {
         super(value);
       }
     }
 
     static now() {
-      return fixedNowMs;
+      return currentNowMs;
     }
   }
 
@@ -221,6 +222,9 @@ function createSandbox(feedBuffer) {
     failNextFeed: () => {
       failNextFeed = true;
     },
+    advanceTime: (ms) => {
+      currentNowMs += ms;
+    },
     runIntervals: async (times = 1) => {
       for (let i = 0; i < times; i += 1) {
         for (const { fn } of intervals.values()) {
@@ -263,6 +267,7 @@ test("renders arrivals from bundled app and refreshes", async () => {
     feedFetchCount,
     stopsFetchCount,
     failNextFeed,
+    advanceTime,
     runIntervals
   } = createSandbox(feedBuffer);
 
@@ -290,6 +295,12 @@ test("renders arrivals from bundled app and refreshes", async () => {
   assert.ok(listsHtml.includes("Southbound"), "renders southbound card");
   assert.ok(listsHtml.includes("in 2 min"), "renders relative time");
   assert.ok(listsHtml.includes("next in 3m"), "renders headway text");
+
+  advanceTime(60_000);
+  await runIntervals();
+
+  const updatedListsHtml = document.get("#lists").innerHTML;
+  assert.ok(updatedListsHtml.includes("in 1 min"), "countdowns tick in place");
 
   assert.equal(
     document.get("#stop-select").value,
@@ -327,6 +338,6 @@ test("renders arrivals from bundled app and refreshes", async () => {
   );
 
   await runIntervals(2);
-  await waitForFetchCount(feedFetchCount, 4);
-  assert.equal(feedFetchCount(), 4, "scheduled refresh should fetch again");
+  await waitForFetchCount(feedFetchCount, 5);
+  assert.equal(feedFetchCount(), 5, "scheduled refresh should fetch again");
 });
