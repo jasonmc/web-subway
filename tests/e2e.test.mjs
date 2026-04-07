@@ -9,7 +9,10 @@ import gtfs from "gtfs-realtime-bindings";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
 const distIndexPath = path.join(projectRoot, "dist", "index.html");
-const stopsCsv = "stop_id,stop_name\nG26,Greenpoint Av\nG22,Other Stop\n";
+const stopsCsv =
+  'stop_id,stop_name,parent_station,platform_code,location_type,parent_station\n' +
+  'G26,"Greenpoint Av, Brooklyn",,,0,\n' +
+  'G22,Other Stop,,,0,\n';
 
 const fixedNowMs = Date.parse("2024-01-01T12:00:00Z");
 const fixedNowSeconds = Math.floor(fixedNowMs / 1000);
@@ -313,7 +316,7 @@ test("renders arrivals from bundled app and refreshes", async () => {
   );
   assert.equal(
     document.get("#stop-name").textContent,
-    "Greenpoint Av",
+    "Greenpoint Av, Brooklyn",
     "header shows current stop name"
   );
 

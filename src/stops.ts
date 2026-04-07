@@ -2,6 +2,37 @@ import stopsCsvGzUrl from "../all_stops.csv.gz?url";
 import { DEFAULT_STOP_ID_PREFIX } from "./config";
 import { state, StopOption } from "./state";
 
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (char === "," && !inQuotes) {
+      fields.push(current);
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  fields.push(current);
+  return fields;
+}
+
 function parseStops(csv: string): StopOption[] {
   const rows = csv.trim().split(/\r?\n/);
   const [, ...dataRows] = rows;
@@ -9,7 +40,8 @@ function parseStops(csv: string): StopOption[] {
 
   for (const row of dataRows) {
     if (!row.trim()) continue;
-    const [stopId, stopName, , , locationType, parentStation] = row.split(",");
+    const [stopId, stopName, , , locationType, parentStation] =
+      parseCsvLine(row);
     if (!stopId || !stopName) continue;
 
     const baseId =
