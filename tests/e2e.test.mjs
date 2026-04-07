@@ -116,7 +116,7 @@ function buildFeedBuffer(nowSeconds) {
   );
 }
 
-function createSandbox(feedBuffer) {
+function createSandbox(feedBuffer, initialHash = "") {
   const document = new StubDocument();
   const intervals = new Map();
   let feedFetchCount = 0;
@@ -158,10 +158,10 @@ function createSandbox(feedBuffer) {
   }
 
   const location = {
-    href: "https://example.com/",
+    href: `https://example.com/${initialHash}`,
     search: "",
     pathname: "/",
-    hash: "",
+    hash: initialHash,
     toString() {
       return this.href;
     }
@@ -340,4 +340,39 @@ test("renders arrivals from bundled app and refreshes", async () => {
   await runIntervals(2);
   await waitForFetchCount(feedFetchCount, 5);
   assert.equal(feedFetchCount(), 5, "scheduled refresh should fetch again");
+});
+
+test("preserves selected stop when current feed has no arrivals for it", async () => {
+  const html = fs.readFileSync(distIndexPath, "utf8");
+  const script = extractInlineModule(html);
+  const feedBuffer = buildFeedBuffer(fixedNowSeconds);
+  const { context, document } = createSandbox(feedBuffer, "#G22");
+
+  vm.runInNewContext(script, context, { filename: "bundle.js" });
+
+  await waitForRender(document);
+
+  assert.equal(
+    document.get("#stop-select").value,
+    "G22",
+    "keeps the requested stop selected"
+  );
+  assert.equal(
+    document.get("#stop-name").textContent,
+    "Other Stop",
+    "header keeps the selected stop label"
+  );
+  assert.ok(
+    document.get("#stop-select").innerHTML.includes('value="G22"'),
+    "dropdown preserves the selected stop even when it is absent from the feed"
+  );
+  assert.ok(
+    document.get("#lists").innerHTML.includes("No arrivals in the feed."),
+    "shows empty state instead of switching stations"
+  );
+  assert.equal(
+    context.location.hash,
+    "#G22",
+    "url hash remains on the selected stop"
+  );
 });

@@ -106,21 +106,20 @@ export function updateStopSelect(availableOrder?: string[]) {
   );
 
   const finalIds = idsToRender.length > 0 ? idsToRender : PREFERRED_STOP_ORDER;
-  const optionsToRender = finalIds.map(
+  const preservedIds = finalIds.includes(state.selectedStopPrefix)
+    ? finalIds
+    : [state.selectedStopPrefix, ...finalIds];
+  const preservedOptions = preservedIds.map(
     (id) => state.stopLookup.get(id) ?? { id, name: id }
   );
 
-  const nextKey = finalIds.join(",");
-  let needsUpdate = nextKey !== state.lastRenderedStopsKey;
+  const nextKey = preservedIds.join(",");
+  const needsUpdate = nextKey !== state.lastRenderedStopsKey;
 
-  let nextSelectedId = state.selectedStopPrefix;
-  if (!optionsToRender.some((s) => s.id === nextSelectedId) && optionsToRender[0]) {
-    nextSelectedId = optionsToRender[0].id;
-    needsUpdate = true;
-  }
+  const nextSelectedId = state.selectedStopPrefix;
 
   if (needsUpdate) {
-    stopSelect.innerHTML = optionsToRender
+    stopSelect.innerHTML = preservedOptions
       .map(
         (stop) =>
           `<option value="${stop.id}" ${
