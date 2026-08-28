@@ -13,11 +13,11 @@
     "test:e2e": "npm run build -- --emptyOutDir=false && node --test tests/e2e.test.mjs"
   },
   "dependencies": {
-    "gtfs-realtime-bindings": "1.1.1"
+    "gtfs-realtime-bindings": "^2.2.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
-    "vite": "^7.3.0",
-    "vite-plugin-singlefile": "^2.3.0"
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vite-plugin-singlefile": "^2.3.3"
   }
 }
