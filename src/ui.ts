@@ -3,14 +3,18 @@ import { ARRIVALS_PER_DIRECTION, PREFERRED_STOP_ORDER } from "./config";
 import { state, Arrival, ArrivalGroup, FeedMeta } from "./state";
 import { stopLabel } from "./stops";
 
-const statusEl = document.querySelector<HTMLElement>("#status");
-const listsEl = document.querySelector<HTMLElement>("#lists");
-const stopSelect = document.querySelector<HTMLSelectElement>("#stop-select");
-const stopNameEl = document.querySelector<HTMLElement>("#stop-name");
-
-if (!statusEl || !listsEl || !stopSelect || !stopNameEl) {
-  throw new Error("Missing required UI elements.");
+function requiredElement<T extends Element>(selector: string): T {
+  const element = document.querySelector<T>(selector);
+  if (!element) {
+    throw new Error(`Missing required UI element: ${selector}`);
+  }
+  return element;
 }
+
+const statusEl = requiredElement<HTMLElement>("#status");
+const listsEl = requiredElement<HTMLElement>("#lists");
+const stopSelect = requiredElement<HTMLSelectElement>("#stop-select");
+const stopNameEl = requiredElement<HTMLElement>("#stop-name");
 
 function syncStopParam() {
   try {

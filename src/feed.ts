@@ -3,8 +3,9 @@ import { STOP_SUFFIX_RE } from "./config";
 import { Arrival, ArrivalGroup, Direction, FeedMeta } from "./state";
 
 const { transit_realtime } = transitRealtime;
+type FeedMessage = transitRealtime.transit_realtime.FeedMessage;
 
-export function decodeFeed(buf: ArrayBuffer): transit_realtime.FeedMessage {
+export function decodeFeed(buf: ArrayBuffer): FeedMessage {
   return transit_realtime.FeedMessage.decode(new Uint8Array(buf));
 }
 
@@ -12,7 +13,7 @@ function stopIdPrefixOf(stopId: string): string {
   return stopId.replace(STOP_SUFFIX_RE, "");
 }
 
-export function stopsInFeed(feed: transit_realtime.FeedMessage): Set<string> {
+export function stopsInFeed(feed: FeedMessage): Set<string> {
   const ids = new Set<string>();
   for (const entity of feed.entity) {
     const updates = entity.tripUpdate?.stopTimeUpdate ?? [];
@@ -72,7 +73,7 @@ export function headway(current: Arrival, next?: Arrival): string {
 }
 
 export function parseFeed(
-  feed: transit_realtime.FeedMessage,
+  feed: FeedMessage,
   stopIdPrefix: string
 ): {
   arrivals: ArrivalGroup;
