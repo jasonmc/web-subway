@@ -3,6 +3,7 @@ import "./style.css";
 import { ARRIVALS_PER_DIRECTION, DEFAULT_FEED_URL } from "./config";
 import { decodeFeed, parseFeed, stopsInFeed } from "./feed";
 import { initStops } from "./stops";
+import { nearestStopFromDevice } from "./location";
 import { state } from "./state";
 import { scheduleAgeTicker, scheduleRefresh } from "./timers";
 import {
@@ -81,12 +82,22 @@ async function load(showLoading = true) {
 
 void (async () => {
   try {
-    await initStops();
+    const hasUrlStop = await initStops();
+    let manuallySelected = false;
     setSelectedStop(state.selectedStopPrefix);
     initStopSelect(() => {
+      manuallySelected = true;
       void load();
       scheduleRefresh(load);
     });
+    if (!hasUrlStop) {
+      void nearestStopFromDevice().then((nearest) => {
+        if (!nearest || manuallySelected) return;
+        setSelectedStop(nearest);
+        updateStopSelect();
+        void load(false);
+      });
+    }
     await load();
     scheduleRefresh(load);
     scheduleAgeTicker(() => {

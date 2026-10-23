@@ -35,13 +35,18 @@ function parseCsvLine(line: string): string[] {
 
 function parseStops(csv: string): StopOption[] {
   const rows = csv.trim().split(/\r?\n/);
-  const [, ...dataRows] = rows;
+  const [header, ...dataRows] = rows;
+  const columns = parseCsvLine(header);
   const byId = new Map<string, StopOption>();
 
   for (const row of dataRows) {
     if (!row.trim()) continue;
-    const [stopId, stopName, , , locationType, parentStation] =
-      parseCsvLine(row);
+    const fields = parseCsvLine(row);
+    const field = (name: string) => fields[columns.indexOf(name)];
+    const stopId = field("stop_id");
+    const stopName = field("stop_name");
+    const locationType = field("location_type");
+    const parentStation = field("parent_station");
     if (!stopId || !stopName) continue;
 
     const baseId =
@@ -49,7 +54,17 @@ function parseStops(csv: string): StopOption[] {
       (locationType === "1" ? stopId : stopId.replace(/[NS]$/, ""));
 
     if (!byId.has(baseId)) {
-      byId.set(baseId, { id: baseId, name: stopName });
+      const stop: StopOption = { id: baseId, name: stopName };
+      const latitude = Number(field("stop_lat")?.trim() || NaN);
+      const longitude = Number(field("stop_lon")?.trim() || NaN);
+      if (
+        Number.isFinite(latitude) && Math.abs(latitude) <= 90 &&
+        Number.isFinite(longitude) && Math.abs(longitude) <= 180
+      ) {
+        stop.latitude = latitude;
+        stop.longitude = longitude;
+      }
+      byId.set(baseId, stop);
     }
   }
 
@@ -107,6 +122,7 @@ export async function initStops() {
     ? urlStop
     : null;
   state.selectedStopPrefix = validUrlStop ?? state.defaultStop.id;
+  return validUrlStop !== null;
 }
 
 export function stopLabel(stopId: string): string {

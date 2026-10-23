@@ -15,7 +15,12 @@ export type FeedMeta = {
   headerTimestampMs: number | null;
 };
 
-export type StopOption = { id: string; name: string };
+export type StopOption = {
+  id: string;
+  name: string;
+  latitude?: number;
+  longitude?: number;
+};
 
 export const state = {
   refreshTimer: undefined as number | undefined,

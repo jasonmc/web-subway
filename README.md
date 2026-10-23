@@ -21,7 +21,9 @@ Minimal Vite + TypeScript page that pulls the MTA GTFS-RT G train feed, filters 
 ```sh
 npm run dev
 ```
-Open the printed local URL. Pick a station from the dropdown (defaults to Greenpoint Av / G26). The current station is kept in the URL hash (`#G26`) so reloads/bookmarks preserve your selection. Click **Refresh** to refetch the feed.
+Open the printed local URL. On a fresh visit, allow device location to automatically select the nearest station in the dropdown. Arrivals load while location is pending; if permission is denied, location times out, or geolocation is unavailable, Greenpoint Av / G26 remains selected. Geolocation requires HTTPS or localhost. A station in the URL hash (`#G26`) takes priority, so reloads/bookmarks preserve your selection. Choosing a station manually also takes priority over a pending location request.
+
+Station IDs, names, and coordinates are bundled together in `all_stops.csv` (`stop_id`, `stop_name`, `stop_lat`, `stop_lon`). Coordinates come from the [MTA Subway Stations dataset](https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f) (retrieved October 23, 2026). Stops with missing coordinates still have names available but are skipped for nearest-station selection. Nearest-station selection runs on the device using straight-line distance among the stations supported by this G train feed; location is not sent to the app's server or MTA.
 
 Note: the stops list is shipped compressed (gzip) and decompressed client-side; requires a browser with `DecompressionStream` support (modern Chrome/Edge/Safari).
 

@@ -10,9 +10,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
 const distIndexPath = path.join(projectRoot, "dist", "index.html");
 const stopsCsv =
-  'stop_id,stop_name,parent_station,platform_code,location_type,parent_station\n' +
-  'G26,"Greenpoint Av, Brooklyn",,,0,\n' +
-  'G22,Other Stop,,,0,\n';
+  'stop_id,stop_name,stop_lat,stop_lon\n' +
+  'G26,"Greenpoint Av, Brooklyn",40.731352,-73.954449\n' +
+  'G24,21 St,40.744065,-73.949724\n' +
+  'F27,Church Av,40.644041,-73.979678\n' +
+  'G22,Other Stop,40.746554,-73.943832\n';
 
 const fixedNowMs = Date.parse("2024-01-01T12:00:00Z");
 const fixedNowSeconds = Math.floor(fixedNowMs / 1000);
@@ -119,7 +121,7 @@ function buildFeedBuffer(nowSeconds) {
   );
 }
 
-function createSandbox(feedBuffer, initialHash = "") {
+function createSandbox(feedBuffer, initialHash = "", geolocation, csv = stopsCsv) {
   const document = new StubDocument();
   const intervals = new Map();
   let feedFetchCount = 0;
@@ -133,7 +135,7 @@ function createSandbox(feedBuffer, initialHash = "") {
     const isStopsFetch = stopsFetchCount === 0;
     if (isStopsFetch) {
       stopsFetchCount += 1;
-      const bytes = new TextEncoder().encode(stopsCsv);
+      const bytes = new TextEncoder().encode(csv);
       return new Response(bytes);
     }
     feedFetchCount += 1;
@@ -194,7 +196,7 @@ function createSandbox(feedBuffer, initialHash = "") {
     document,
     location,
     history,
-    navigator: { userAgent: "node" },
+    navigator: { userAgent: "node", geolocation },
     setTimeout,
     setInterval,
     clearInterval,
@@ -379,3 +381,116 @@ test("preserves selected stop when current feed has no arrivals for it", async (
     "url hash remains on the selected stop"
   );
 });
+
+for (const [latitude, longitude, id, name, hash] of [
+  [40.746554, -73.943832, "G22", "Other Stop", ""],
+  [40.744, -73.950, "G24", "21 St", ""],
+  [40.644, -73.980, "F27", "Church Av", "#unknown"]
+]) {
+  test(`selects the nearest supported station using device location: ${id}`, async () => {
+    const script = extractInlineModule(fs.readFileSync(distIndexPath, "utf8"));
+    let locate;
+    const { context, document, feedFetchCount } = createSandbox(
+      buildFeedBuffer(fixedNowSeconds), hash, {
+        getCurrentPosition(success, _error, options) {
+          locate = success;
+          assert.equal(options.timeout, 8000);
+        }
+      }
+    );
+    vm.runInNewContext(script, context, { filename: "bundle.js" });
+    await waitForRender(document);
+    assert.equal(document.get("#stop-select").value, "G26",
+      "arrivals load before location resolves");
+
+    locate({ coords: { latitude, longitude } });
+    await waitForFetchCount(feedFetchCount, 2);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    assert.equal(document.get("#stop-select").value, id);
+    assert.equal(document.get("#stop-name").textContent, name);
+    assert.equal(context.location.hash, `#${id}`);
+    assert.ok(document.get("#lists").innerHTML.includes("No arrivals in the feed."),
+      "nearest station remains selected even without arrivals");
+  });
+}
+
+test("a station link takes priority over device location", async () => {
+  const script = extractInlineModule(fs.readFileSync(distIndexPath, "utf8"));
+  let locationRequests = 0;
+  const { context, document } = createSandbox(
+    buildFeedBuffer(fixedNowSeconds), "#G22", {
+      getCurrentPosition() { locationRequests += 1; }
+    }
+  );
+  vm.runInNewContext(script, context, { filename: "bundle.js" });
+  await waitForRender(document);
+  assert.equal(document.get("#stop-select").value, "G22");
+  assert.equal(locationRequests, 0, "saved links do not request location");
+});
+
+test("manual station selection takes priority over a pending location request", async () => {
+  const script = extractInlineModule(fs.readFileSync(distIndexPath, "utf8"));
+  let locate;
+  const { context, document, feedFetchCount } = createSandbox(
+    buildFeedBuffer(fixedNowSeconds), "", {
+      getCurrentPosition(success) { locate = success; }
+    }
+  );
+  vm.runInNewContext(script, context, { filename: "bundle.js" });
+  await waitForRender(document);
+  const select = document.get("#stop-select");
+  select.value = "G26";
+  select.handlers.get("change")();
+  await waitForFetchCount(feedFetchCount, 2);
+  locate({ coords: { latitude: 40.746554, longitude: -73.943832 } });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(select.value, "G26");
+  assert.equal(context.location.hash, "#G26");
+  assert.equal(feedFetchCount(), 2, "late location does not trigger another load");
+});
+
+for (const [scenario, geolocation] of [
+  ["permission denied", { getCurrentPosition(_success, error) { error({ code: 1 }); } }],
+  ["position unavailable", { getCurrentPosition(_success, error) { error({ code: 2 }); } }],
+  ["timeout", { getCurrentPosition(_success, error) { error({ code: 3 }); } }],
+  ["API throws", { getCurrentPosition() { throw new Error("unavailable"); } }],
+  ["invalid coordinates", { getCurrentPosition(success) {
+    success({ coords: { latitude: NaN, longitude: -73.94 } });
+  } }]
+]) {
+  test(`keeps the fallback station when geolocation fails: ${scenario}`, async () => {
+    const script = extractInlineModule(fs.readFileSync(distIndexPath, "utf8"));
+    const { context, document } = createSandbox(
+      buildFeedBuffer(fixedNowSeconds), "", geolocation
+    );
+    vm.runInNewContext(script, context, { filename: "bundle.js" });
+    await waitForRender(document);
+    assert.equal(document.get("#stop-select").value, "G26");
+    assert.ok(document.get("#lists").innerHTML.includes("Northbound"));
+  });
+}
+
+for (const [scenario, csv, expectedId] of [
+  ["bundled station dataset", fs.readFileSync(path.join(projectRoot, "all_stops.csv"), "utf8"), "G22"],
+  ["reordered CSV columns", 'stop_lon,stop_name,stop_id,stop_lat\n' +
+    '-73.954449,Greenpoint Av,G26,40.731352\n' +
+    '-73.943832,Court Sq,G22,40.746554\n', "G22"],
+  ["missing coordinates", stopsCsv.replace('40.746554,-73.943832', ','), "G24"],
+  ["invalid station coordinates", stopsCsv.replace('40.746554,-73.943832', '999,-73.943832'), "G24"]
+]) {
+  test(`selects nearest station from CSV: ${scenario}`, async () => {
+    const script = extractInlineModule(fs.readFileSync(distIndexPath, "utf8"));
+    const { context, document } = createSandbox(
+      buildFeedBuffer(fixedNowSeconds), "", {
+        getCurrentPosition(success) {
+          success({ coords: { latitude: 40.746554, longitude: -73.943832 } });
+        }
+      }, csv
+    );
+    vm.runInNewContext(script, context, { filename: "bundle.js" });
+    await waitForRender(document);
+    assert.equal(document.get("#stop-select").value, expectedId);
+    assert.equal(context.location.hash, `#${expectedId}`);
+  });
+}
