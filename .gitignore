@@ -1,0 +1,10 @@
+node_modules/
+dist/
+all_stops.csv.gz
+.env
+.env.*
+!.env.example
+.DS_Store
+*.tsbuildinfo
+result
+result-*

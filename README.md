@@ -1,6 +1,6 @@
-# Greenpoint subway arrivals (browser)
+# G train arrivals
 
-Minimal Vite + TypeScript page that pulls the MTA GTFS-RT G train feed, filters Greenpoint Av stop IDs (`G22*`), and shows the next arrivals grouped by direction.
+A Vite + TypeScript page that reads the MTA GTFS-RT G train feed and shows the next arrivals grouped by direction. It selects the nearest G train station using device location, with a station dropdown for manual selection.
 
 ## Setup
 
@@ -9,12 +9,12 @@ Minimal Vite + TypeScript page that pulls the MTA GTFS-RT G train feed, filters 
    cd web-subway
    npm install
    ```
-2. Provide your MTA key in a `.env` file (or shell export):
+2. Optionally override the feed URL in a `.env` file:
    ```
-   VITE_MTA_API_KEY=your-key-here
-   # Optional: override feed URL
-   # VITE_MTA_FEED_URL=https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g
+   VITE_MTA_FEED_URL=https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g
    ```
+
+The default feed works without an API key. `VITE_` variables are included in the browser bundle, so do not use them for secrets.
 
 ## Run
 
@@ -38,11 +38,11 @@ There is a standalone flake in this folder that builds the static site (`flake.n
 
 1. Ensure you have Node/npm available (needed only to produce `package-lock.json` and the npm dependency hash).
 2. From `web-subway/`, run `npm install --package-lock-only` once to generate `package-lock.json`.
-3. Compute the npm dependency hash by running:
+3. After updating npm dependencies, replace `npmDepsHash` in `flake.nix` with `pkgs.lib.fakeHash`, then run:
    ```sh
    nix build .#default --print-build-logs
    ```
-   Nix will fail with a message showing the expected `npmDepsHash`. Replace `pkgs.lib.fakeHash` in `web-subway/flake.nix` with that value.
+   Nix will fail with a hash mismatch showing the actual dependency hash. Set `npmDepsHash` in `flake.nix` to that value.
 4. Re-run `nix build .#default` to produce a fully bundled `dist/` and a final `$out` containing `index.html` and JS/CSS with no CDN references.
 
 The flake exposes:
@@ -51,5 +51,9 @@ The flake exposes:
 
 ## Notes
 
-- The endpoint you pasted includes `access-control-allow-origin: *`, so this works directly in the browser as long as the API key is accepted in CORS (`x-api-key` is sent).
-- Feed is decoded client-side via `gtfs-realtime-bindings`; data is limited to Greenpoint Av stop IDs and the next 3 arrivals per direction.
+- The browser fetches the public MTA feed directly using CORS and decodes it with `gtfs-realtime-bindings`.
+- The page shows the selected G train station's next 3 arrivals per direction and refreshes every 5 seconds.
+
+## License
+
+The application code is available under the [MIT License](LICENSE). Station data is sourced from the MTA, as described above.
