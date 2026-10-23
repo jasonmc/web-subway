@@ -11,7 +11,7 @@
       let
         pkgs = import nixpkgs { inherit system; };
         src = pkgs.lib.cleanSource ./.;
-        npmDepsHash = "sha256-iof/WhTkfw8Rr7YW4MFD5tysZbzCuv+Wz9vITAXP8A4=";
+        npmDepsHash = "sha256-hSOyJl67i/bu6adQlizPhLGo6ejpB2Opt8Ln3zbkv0g=";
         npmInstallFlags = [ "--legacy-peer-deps" ];
         web = pkgs.buildNpmPackage {
           pname = "greenpoint-subway-web";
