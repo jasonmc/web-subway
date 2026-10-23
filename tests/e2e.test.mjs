@@ -5,6 +5,7 @@ import vm from "node:vm";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import gtfs from "gtfs-realtime-bindings";
+import { parseStops } from "../src/parse-stops.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
@@ -121,23 +122,15 @@ function buildFeedBuffer(nowSeconds) {
   );
 }
 
-function createSandbox(feedBuffer, initialHash = "", geolocation, csv = stopsCsv) {
+function createSandbox(feedBuffer, initialHash = "", geolocation) {
   const document = new StubDocument();
   const intervals = new Map();
   let feedFetchCount = 0;
-  let stopsFetchCount = 0;
   let timeouts = 0;
   let failNextFeed = false;
   let currentNowMs = fixedNowMs;
 
   const fetchMock = async (url) => {
-    // First fetch is always the stops CSV; subsequent fetches are the feed.
-    const isStopsFetch = stopsFetchCount === 0;
-    if (isStopsFetch) {
-      stopsFetchCount += 1;
-      const bytes = new TextEncoder().encode(csv);
-      return new Response(bytes);
-    }
     feedFetchCount += 1;
     if (failNextFeed) {
       failNextFeed = false;
@@ -223,7 +216,6 @@ function createSandbox(feedBuffer, initialHash = "", geolocation, csv = stopsCsv
     context,
     document,
     feedFetchCount: () => feedFetchCount,
-    stopsFetchCount: () => stopsFetchCount,
     failNextFeed: () => {
       failNextFeed = true;
     },
@@ -270,7 +262,6 @@ test("renders arrivals from bundled app and refreshes", async () => {
     context,
     document,
     feedFetchCount,
-    stopsFetchCount,
     failNextFeed,
     advanceTime,
     runIntervals
@@ -279,12 +270,6 @@ test("renders arrivals from bundled app and refreshes", async () => {
   vm.runInNewContext(script, context, { filename: "bundle.js" });
 
   await waitForRender(document);
-
-  assert.equal(
-    stopsFetchCount(),
-    1,
-    "stops csv fetched once"
-  );
 
   assert.equal(
     feedFetchCount(),
@@ -318,7 +303,7 @@ test("renders arrivals from bundled app and refreshes", async () => {
   );
   assert.equal(
     document.get("#stop-name").textContent,
-    "Greenpoint Av, Brooklyn",
+    "Greenpoint Av",
     "header shows current stop name"
   );
 
@@ -364,7 +349,7 @@ test("preserves selected stop when current feed has no arrivals for it", async (
   );
   assert.equal(
     document.get("#stop-name").textContent,
-    "Other Stop",
+    "Court Sq",
     "header keeps the selected stop label"
   );
   assert.ok(
@@ -383,7 +368,7 @@ test("preserves selected stop when current feed has no arrivals for it", async (
 });
 
 for (const [latitude, longitude, id, name, hash] of [
-  [40.746554, -73.943832, "G22", "Other Stop", ""],
+  [40.746554, -73.943832, "G22", "Court Sq", ""],
   [40.744, -73.950, "G24", "21 St", ""],
   [40.644, -73.980, "F27", "Church Av", "#unknown"]
 ]) {
@@ -471,26 +456,25 @@ for (const [scenario, geolocation] of [
   });
 }
 
-for (const [scenario, csv, expectedId] of [
-  ["bundled station dataset", fs.readFileSync(path.join(projectRoot, "all_stops.csv"), "utf8"), "G22"],
+for (const [scenario, csv, hasCoordinates] of [
+  ["bundled station dataset", fs.readFileSync(path.join(projectRoot, "all_stops.csv"), "utf8"), true],
   ["reordered CSV columns", 'stop_lon,stop_name,stop_id,stop_lat\n' +
     '-73.954449,Greenpoint Av,G26,40.731352\n' +
-    '-73.943832,Court Sq,G22,40.746554\n', "G22"],
-  ["missing coordinates", stopsCsv.replace('40.746554,-73.943832', ','), "G24"],
-  ["invalid station coordinates", stopsCsv.replace('40.746554,-73.943832', '999,-73.943832'), "G24"]
+    '-73.943832,Court Sq,G22,40.746554\n', true],
+  ["missing coordinates", stopsCsv.replace('40.746554,-73.943832', ','), false],
+  ["invalid station coordinates", stopsCsv.replace('40.746554,-73.943832', '999,-73.943832'), false]
 ]) {
-  test(`selects nearest station from CSV: ${scenario}`, async () => {
-    const script = extractInlineModule(fs.readFileSync(distIndexPath, "utf8"));
-    const { context, document } = createSandbox(
-      buildFeedBuffer(fixedNowSeconds), "", {
-        getCurrentPosition(success) {
-          success({ coords: { latitude: 40.746554, longitude: -73.943832 } });
-        }
-      }, csv
-    );
-    vm.runInNewContext(script, context, { filename: "bundle.js" });
-    await waitForRender(document);
-    assert.equal(document.get("#stop-select").value, expectedId);
-    assert.equal(context.location.hash, `#${expectedId}`);
+  test(`parses station coordinates: ${scenario}`, () => {
+    const stops = parseStops(csv);
+    const courtSq = stops.find((stop) => stop.id === "G22");
+    assert.ok(courtSq, "stations remain available even without valid coordinates");
+    assert.equal(courtSq.latitude, hasCoordinates ? 40.746554 : undefined);
+    assert.equal(courtSq.longitude, hasCoordinates ? -73.943832 : undefined);
+    assert.equal(stops.find((stop) => stop.id === "G26").latitude, 40.731352);
   });
 }
+
+test("parses quoted station names with commas", () => {
+  assert.equal(parseStops(stopsCsv).find((stop) => stop.id === "G26").name,
+    "Greenpoint Av, Brooklyn");
+});

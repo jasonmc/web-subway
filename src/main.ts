@@ -82,7 +82,7 @@ async function load(showLoading = true) {
 
 void (async () => {
   try {
-    const hasUrlStop = await initStops();
+    const hasUrlStop = initStops();
     let manuallySelected = false;
     setSelectedStop(state.selectedStopPrefix);
     initStopSelect(() => {

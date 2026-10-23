@@ -1,6 +1,5 @@
 node_modules/
 dist/
-all_stops.csv.gz
 .env
 .env.*
 !.env.example

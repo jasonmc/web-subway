@@ -5,9 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prepare:stops": "node scripts/gzip-stops.js",
-    "dev": "npm run prepare:stops && vite",
-    "prebuild": "npm run prepare:stops",
+    "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
