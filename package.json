@@ -5,10 +5,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "fable watch App.fsproj --run vite",
+    "build": "fable App.fsproj && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "dotnet build App.fsproj",
     "test:e2e": "npm run build -- --emptyOutDir=false && node --test tests/e2e.test.mjs"
   },
   "dependencies": {

@@ -7,3 +7,7 @@ dist/
 *.tsbuildinfo
 result
 result-*
+bin/
+obj/
+*.fs.js
+fable_modules/

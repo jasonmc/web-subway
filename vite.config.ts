@@ -4,7 +4,7 @@ import { viteSingleFile } from "vite-plugin-singlefile";
 export default defineConfig({
   plugins: [viteSingleFile()],
   build: {
-    target: "es2019",
+    target: "es2020",
     assetsInlineLimit: Infinity,
     cssCodeSplit: false
   }

@@ -13,7 +13,29 @@
         src = pkgs.lib.cleanSource ./.;
         npmDepsHash = "sha256-Xs12fZ3MpJHm2LuOvZ77XJV71eyR5C3LRbSRhpVBFkE=";
         npmInstallFlags = [ "--legacy-peer-deps" ];
-        web = pkgs.buildNpmPackage {
+        dotnet-sdk = pkgs.dotnetCorePackages.sdk_10_0;
+        nugetDeps = map pkgs.dotnetCorePackages.fetchNupkg [
+          {
+            pname = "Fable.Core";
+            version = "4.5.0";
+            hash = "sha256-DOUQUo3mQz9GOykafP1NcjjsriFDcYiCSx1LEhR0piU=";
+          }
+          {
+            pname = "FSharp.Core";
+            version = "10.1.401";
+            hash = "sha256-zx9OafwtE1Gvn6mSOskO1GYIhzCgCGfL4OsbOyxolj4=";
+          }
+        ];
+        fableEnv = {
+          nativeBuildInputs = [
+            dotnet-sdk
+            pkgs.fable
+          ];
+          buildInputs = dotnet-sdk.packages ++ nugetDeps;
+          DOTNET_CLI_TELEMETRY_OPTOUT = "1";
+          DOTNET_NOLOGO = "1";
+        };
+        web = pkgs.buildNpmPackage ({
           pname = "greenpoint-subway-web";
           version = "0.1.0";
           inherit src npmDepsHash npmInstallFlags;
@@ -29,8 +51,8 @@
             license = licenses.mit;
             platforms = platforms.all;
           };
-        };
-        tests = pkgs.buildNpmPackage {
+        } // fableEnv);
+        tests = pkgs.buildNpmPackage ({
           pname = "greenpoint-subway-web-e2e";
           version = "0.1.0";
           inherit src npmDepsHash npmInstallFlags;
@@ -40,10 +62,12 @@
             mkdir -p $out
             runHook postInstall
           '';
-        };
+        } // fableEnv);
       in {
         packages.default = web;
         checks.e2e = tests;
-        devShells.default = pkgs.mkShell { inputsFrom = [ web ]; };
+        devShells.default = pkgs.mkShell {
+          inputsFrom = [ web ];
+        };
       });
 }

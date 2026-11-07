@@ -5,7 +5,7 @@ import vm from "node:vm";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import gtfs from "gtfs-realtime-bindings";
-import { parseStops } from "../src/parse-stops.ts";
+import { parseStops } from "../src/ParseStops.fs.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");

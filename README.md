@@ -1,6 +1,6 @@
 # G train arrivals
 
-A Vite + TypeScript page that reads the MTA GTFS-RT G train feed and shows the next arrivals grouped by direction. It selects the nearest G train station using device location, with a station dropdown for manual selection.
+A Vite + F# (Fable) page that reads the MTA GTFS-RT G train feed and shows the next arrivals grouped by direction. It selects the nearest G train station using device location, with a station dropdown for manual selection.
 
 ## Setup
 
@@ -47,7 +47,7 @@ There is a standalone flake in this folder that builds the static site (`flake.n
 
 The flake exposes:
 - `packages.default`: the bundled static site
-- `devShells.default`: Node + npm + vite for local dev
+- `devShells.default`: .NET + Fable + Node + npm + vite for local dev
 
 ## Notes
 
