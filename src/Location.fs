@@ -42,13 +42,19 @@ let private getCurrentPosition (onSuccess: IGeoPosition -> unit) (onError: obj -
 [<Emit("new Promise($0)")>]
 let private makePromise (executor: ('T -> unit) -> unit) : JS.Promise<'T> = jsNative
 
-let nearestStopFromDevice (stopLookup: Map<string, StopOption>) () : JS.Promise<string option> =
+let nearestStopFromDevice (stopLookup: Map<string, StopOption>) () : JS.Promise<(string * (float * float)) option> =
     makePromise (fun resolve ->
         if not (hasGeolocation ()) then
             resolve None
         else
             try
                 getCurrentPosition
-                    (fun pos -> resolve (nearestStop stopLookup pos.coords.latitude pos.coords.longitude))
+                    (fun pos ->
+                        let lat = pos.coords.latitude
+                        let lon = pos.coords.longitude
+                        let result =
+                            nearestStop stopLookup lat lon
+                            |> Option.map (fun stopId -> stopId, (lat, lon))
+                        resolve result)
                     (fun _ -> resolve None)
             with _ -> resolve None)

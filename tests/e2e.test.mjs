@@ -44,6 +44,7 @@ class StubDocument {
     this.nodes = {
       "#status": new StubElement("div"),
       "#lists": new StubElement("div"),
+      "#map": new StubElement("div"),
       "#stop-select": new StubElement("select"),
       "#stop-name": new StubElement("span")
     };
@@ -397,6 +398,11 @@ for (const [latitude, longitude, id, name, hash] of [
     assert.equal(context.location.hash, `#${id}`);
     assert.ok(document.get("#lists").innerHTML.includes("No arrivals in the feed."),
       "nearest station remains selected even without arrivals");
+    assert.ok(
+      document.get("#map").innerHTML.includes("osm-user-location") &&
+        document.get("#map").innerHTML.includes(`data-lat="${latitude}"`),
+      "renders user location marker on the map when device location is available"
+    );
   });
 }
 
@@ -477,4 +483,134 @@ for (const [scenario, csv, hasCoordinates] of [
 test("parses quoted station names with commas", () => {
   assert.equal(parseStops(stopsCsv).find((stop) => stop.id === "G26").name,
     "Greenpoint Av, Brooklyn");
+});
+
+test("renders OpenStreetMap slippy map with G-line polyline and interpolated live train positions", async () => {
+  const html = fs.readFileSync(distIndexPath, "utf8");
+  const script = extractInlineModule(html);
+  const message = transit_realtime.FeedMessage.create({
+    header: { gtfsRealtimeVersion: "2.0", timestamp: fixedNowSeconds },
+    entity: [
+      {
+        id: "north-train",
+        tripUpdate: {
+          trip: { tripId: "G-N-1", routeId: "G", directionId: 0 },
+          stopTimeUpdate: [
+            { stopId: "G28N", departure: { time: fixedNowSeconds - 30 } },
+            { stopId: "G26N", arrival: { time: fixedNowSeconds + 90 } },
+            { stopId: "G24N", arrival: { time: fixedNowSeconds + 210 } },
+            { stopId: "G22N", arrival: { time: fixedNowSeconds + 330 } }
+          ]
+        }
+      },
+      {
+        id: "south-train",
+        tripUpdate: {
+          trip: { tripId: "123_G..S", routeId: "G", directionId: 0 },
+          stopTimeUpdate: [
+            { stopId: "G24S", arrival: { time: fixedNowSeconds + 80 } },
+            { stopId: "G26S", arrival: { time: fixedNowSeconds + 200 } }
+          ]
+        }
+      },
+      {
+        id: "south-train-veh",
+        vehicle: {
+          trip: { tripId: "123_G..S", routeId: "G" },
+          stopId: "G22S",
+          currentStopSequence: 1,
+          currentStatus: 1,
+          timestamp: fixedNowSeconds - 35
+        }
+      },
+      {
+        id: "unstarted-future",
+        tripUpdate: {
+          trip: { tripId: "999_G..S", routeId: "G" },
+          stopTimeUpdate: [
+            { stopId: "G22S", arrival: { time: fixedNowSeconds + 600 } },
+            { stopId: "G24S", arrival: { time: fixedNowSeconds + 660 } }
+          ]
+        }
+      },
+      {
+        id: "unstarted-future-veh",
+        vehicle: {
+          trip: { tripId: "999_G..S", routeId: "G" },
+          stopId: "G22S",
+          currentStopSequence: 0,
+          currentStatus: 2,
+          timestamp: fixedNowSeconds + 600
+        }
+      }
+    ]
+  });
+  const bytes = transit_realtime.FeedMessage.encode(message).finish();
+  const feedBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+
+  const { context, document, advanceTime, runIntervals, feedFetchCount } = createSandbox(feedBuffer);
+  vm.runInNewContext(script, context, { filename: "bundle.js" });
+  await waitForRender(document);
+
+  const mapEl = document.get("#map");
+  assert.ok(
+    mapEl.innerHTML.includes("vec-land") &&
+      mapEl.innerHTML.includes("osm-track-line"),
+    "renders static vector NYC shoreline basemap and G-line track"
+  );
+  assert.match(
+    mapEl.innerHTML,
+    /class="osm-stop[^"]*"[^>]*style="left:\d+\.\d+%;top:\d+\.\d+%"/,
+    "positions station markers using viewport percentages matching SVG viewBox"
+  );
+  assert.ok(
+    mapEl.innerHTML.includes('data-trip-id="G-N-1"') &&
+      mapEl.innerHTML.includes('data-trip-id="123_G..S"') &&
+      !mapEl.innerHTML.includes('data-trip-id="999_G..S"'),
+    "renders active train markers and filters out unstarted terminal runs"
+  );
+  assert.ok(
+    mapEl.innerHTML.includes("osm-train-svg") &&
+      mapEl.innerHTML.includes("data-heading=") &&
+      mapEl.innerHTML.includes("osm-train-next"),
+    "renders SVG train car icon with track-aligned directional badge and highlights next incoming train"
+  );
+  const listsEl = document.get("#lists");
+  assert.ok(
+    listsEl.innerHTML.includes("arrival-where") &&
+      listsEl.innerHTML.includes("Approaching 21 St · 2 stops away"),
+    "shows live train location and stops-away subtitle on arrival cards"
+  );
+
+  const latMatchBefore = mapEl.innerHTML.match(/data-trip-id="G-N-1" data-lat="([^"]+)"/);
+  assert.ok(latMatchBefore, "records estimated latitude on train marker");
+  const latBefore = Number(latMatchBefore[1]);
+  // G28 (Nassau Av, 40.724635) -> G26 (Greenpoint Av, 40.731352)
+  assert.ok(
+    latBefore > 40.724635 && latBefore < 40.731352,
+    "interpolates northbound train latitude between Nassau Av and Greenpoint Av"
+  );
+
+  advanceTime(30_000);
+  await runIntervals();
+
+  const latMatchAfter = mapEl.innerHTML.match(/data-trip-id="G-N-1" data-lat="([^"]+)"/);
+  const latAfter = Number(latMatchAfter[1]);
+  assert.ok(
+    latAfter > latBefore,
+    "train marker moves northward along the track as time advances"
+  );
+
+  // Click a station dot on the map
+  const clickHandler = mapEl.handlers.get("click");
+  clickHandler({
+    target: {
+      closest(sel) {
+        if (sel === "[data-stop-id]") return { getAttribute: () => "G29" };
+        return null;
+      }
+    }
+  });
+  await waitForFetchCount(feedFetchCount, 2);
+  assert.equal(document.get("#stop-select").value, "G29", "clicking a station marker selects that station");
 });

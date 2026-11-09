@@ -27,7 +27,7 @@ let private fetchCors (url: string) : JS.Promise<IResponse> = jsNative
 [<Emit("($0 instanceof Error ? $0.message : 'Failed to load arrivals.')")>]
 let private errorMessage (err: obj) : string = jsNative
 
-let private fetchAndParse (stopIdPrefix: string) () : JS.Promise<Set<string> * ArrivalGroup * FeedMeta> = promise {
+let private fetchAndParse (stopIdPrefix: string) () : JS.Promise<Set<string> * ArrivalGroup * FeedMeta * RawTrainTrip array> = promise {
     let! res = fetchCors (envFeedUrl |? DEFAULT_FEED_URL)
     if not res.ok then
         failwith $"Request failed: {res.status} {res.statusText}"
@@ -35,8 +35,17 @@ let private fetchAndParse (stopIdPrefix: string) () : JS.Promise<Set<string> * A
     let feed = decodeFeed buf
     let available = stopsInFeed feed
     let arrivals, meta = parseFeed feed stopIdPrefix
-    return available, arrivals, meta
+    let rawTrips = extractRawTrips feed
+    return available, arrivals, meta, rawTrips
 }
+
+let private recomputeTrains
+    (headerTimestampMs: float option)
+    (stopLookup: Map<string, StopOption>)
+    (prevPositions: Map<string, float * float>)
+    (rawTrips: RawTrainTrip array)
+    : EstimatedTrain array * Map<string, float * float> =
+    estimateTrainPositions (effectiveNowSec headerTimestampMs) stopLookup prevPositions rawTrips
 
 let private startRefreshSub : Cmd<Msg> =
     Cmd.ofEffect (fun dispatch ->
@@ -63,6 +72,10 @@ let init () : Model * Cmd<Msg> =
         lastFeedMeta = None
         lastFeedTimestampMs = None
         lastVisibleTotal = 0
+        rawTrips = [||]
+        spinePosByTrip = Map.empty
+        mapTrains = [||]
+        userLocation = None
         status = Loading
     }
     let geoCmd =
@@ -78,11 +91,14 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
         { model with selectedStopPrefix = stopId; manuallySelected = true },
         Cmd.batch [ Cmd.ofMsg (RefreshFeed true); startRefreshSub ]
 
-    | GeoResolved (Some stopId) when not model.manuallySelected && not model.hasUrlStop ->
-        { model with selectedStopPrefix = stopId },
+    | GeoResolved (Some (stopId, coords)) when not model.manuallySelected && not model.hasUrlStop ->
+        { model with selectedStopPrefix = stopId; userLocation = Some coords },
         Cmd.ofMsg (RefreshFeed false)
 
-    | GeoResolved _ ->
+    | GeoResolved (Some (_, coords)) ->
+        { model with userLocation = Some coords }, Cmd.none
+
+    | GeoResolved None ->
         model, Cmd.none
 
     | RefreshFeed _ when model.fetching ->
@@ -98,13 +114,14 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
                 JS.console.error err
                 Error (errorMessage err) |> FeedLoaded)
 
-    | FeedLoaded (Ok (available, arrivals, meta)) ->
+    | FeedLoaded (Ok (available, arrivals, meta, rawTrips)) ->
         let nextAvailable =
             if Set.isEmpty available then model.availableStops else Some available
         let visibleTotal =
             min arrivals.Northbound.Length ARRIVALS_PER_DIRECTION
             + min arrivals.Southbound.Length ARRIVALS_PER_DIRECTION
             + min arrivals.Other.Length ARRIVALS_PER_DIRECTION
+        let nextMapTrains, nextSpinePositions = recomputeTrains meta.headerTimestampMs model.stopLookup model.spinePosByTrip rawTrips
         { model with
             fetching = false
             availableStops = nextAvailable
@@ -112,6 +129,9 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
             lastFeedMeta = Some meta
             lastFeedTimestampMs = meta.headerTimestampMs
             lastVisibleTotal = visibleTotal
+            rawTrips = rawTrips
+            spinePosByTrip = nextSpinePositions
+            mapTrains = nextMapTrains
             status = FeedAge meta.headerTimestampMs },
         Cmd.none
 
@@ -124,7 +144,8 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
             match model.lastFeedTimestampMs with
             | Some ts -> FeedAge (Some ts)
             | None -> model.status
-        { model with status = nextStatus }, Cmd.none
+        let nextMapTrains, nextSpinePositions = recomputeTrains model.lastFeedTimestampMs model.stopLookup model.spinePosByTrip model.rawTrips
+        { model with status = nextStatus; mapTrains = nextMapTrains; spinePosByTrip = nextSpinePositions }, Cmd.none
 
 // Elmish Program runner
 let runProgram () =

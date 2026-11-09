@@ -8,6 +8,7 @@ type Arrival = {
     time: JS.Date
     route: string
     direction: Direction
+    tripId: string option
     label: string option
 }
 
@@ -24,6 +25,29 @@ type StopOption = {
     name: string
     latitude: float option
     longitude: float option
+}
+
+type TrainStopCall = {
+    stopId: string
+    arriveSec: float
+    departSec: float
+}
+
+type RawTrainTrip = {
+    tripId: string
+    direction: Direction
+    calls: TrainStopCall array
+}
+
+type EstimatedTrain = {
+    tripId: string
+    direction: Direction
+    latitude: float
+    longitude: float
+    spinePos: float
+    headingDeg: float
+    isStopped: bool
+    nextStopId: string
 }
 
 type StatusDisplay =
@@ -45,13 +69,17 @@ type Model = {
     lastFeedMeta: FeedMeta option
     lastFeedTimestampMs: float option
     lastVisibleTotal: int
+    rawTrips: RawTrainTrip array
+    spinePosByTrip: Map<string, float * float>
+    mapTrains: EstimatedTrain array
+    userLocation: (float * float) option
     status: StatusDisplay
 }
 
 // Elmish Messages
 type Msg =
     | SelectStop of stopId: string
-    | GeoResolved of stopId: string option
+    | GeoResolved of (string * (float * float)) option
     | RefreshFeed of showLoading: bool
-    | FeedLoaded of Result<Set<string> * ArrivalGroup * FeedMeta, string>
+    | FeedLoaded of Result<Set<string> * ArrivalGroup * FeedMeta * RawTrainTrip array, string>
     | TickAge
