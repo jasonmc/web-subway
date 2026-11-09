@@ -32,6 +32,18 @@ The stops CSV is embedded directly in the single HTML build. Enable HTTP compres
 - `npm run typecheck`
 - `npm run test:e2e` builds the bundle and runs a Node-based harness against the inlined `dist/index.html` output (includes stop selection). `nix flake check` executes this.
 
+## GitHub Pages
+
+The workflow in `.github/workflows/pages.yml` tests and builds the site with the locked Nix flake, then deploys it to GitHub Pages on every push to `master`. It can also be started manually from the Actions tab. Nix generates the map SVG and supplies Node, .NET, and Fable, so the runner needs no separate npm or .NET setup.
+
+One-time setup:
+
+1. In [the repository's Pages settings](https://github.com/jasonmc/web-subway/settings/pages), select **GitHub Actions** under **Build and deployment → Source**.
+2. Commit and push the workflow to `master`.
+3. Open **Actions → Deploy to GitHub Pages** and wait for the deployment to finish.
+
+The site will be available at <https://jasonmc.github.io/web-subway/>. All scripts, styles, station data, and the map are embedded in `index.html`, so no Vite base-path change is needed for `/web-subway/`. Pages provides HTTPS for device location. The public MTA feed is fetched directly by the browser; no API key or repository secret is needed.
+
 ## Nix build (single-file, no CDN)
 
 There is a standalone flake in this folder that builds the static site (`flake.nix`). The Vite build is configured with `vite-plugin-singlefile`, so the output `dist/index.html` contains all JS/CSS inlined (no CDN and no additional assets).
