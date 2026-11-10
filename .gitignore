@@ -12,3 +12,4 @@ obj/
 *.fs.js
 fable_modules/
 g_corridor.svg
+stops.json

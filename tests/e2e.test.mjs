@@ -6,17 +6,10 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { Window } from "happy-dom";
 import gtfs from "gtfs-realtime-bindings";
-import { parseStops } from "../src/ParseStops.fs.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
 const distIndexPath = path.join(projectRoot, "dist", "index.html");
-const stopsCsv =
-  'stop_id,stop_name,stop_lat,stop_lon\n' +
-  'G26,"Greenpoint Av, Brooklyn",40.731352,-73.954449\n' +
-  'G24,21 St,40.744065,-73.949724\n' +
-  'F27,Church Av,40.644041,-73.979678\n' +
-  'G22,Other Stop,40.746554,-73.943832\n';
 
 const fixedNowMs = Date.parse("2024-01-01T12:00:00Z");
 const fixedNowSeconds = Math.floor(fixedNowMs / 1000);
@@ -420,27 +413,13 @@ for (const [scenario, geolocation] of [
   });
 }
 
-for (const [scenario, csv, hasCoordinates] of [
-  ["bundled station dataset", fs.readFileSync(path.join(projectRoot, "all_stops.csv"), "utf8"), true],
-  ["reordered CSV columns", 'stop_lon,stop_name,stop_id,stop_lat\n' +
-    '-73.954449,Greenpoint Av,G26,40.731352\n' +
-    '-73.943832,Court Sq,G22,40.746554\n', true],
-  ["missing coordinates", stopsCsv.replace('40.746554,-73.943832', ','), false],
-  ["invalid station coordinates", stopsCsv.replace('40.746554,-73.943832', '999,-73.943832'), false]
-]) {
-  test(`parses station coordinates: ${scenario}`, () => {
-    const stops = parseStops(csv);
-    const courtSq = stops.find((stop) => stop.id === "G22");
-    assert.ok(courtSq, "stations remain available even without valid coordinates");
-    assert.equal(courtSq.latitude, hasCoordinates ? 40.746554 : undefined);
-    assert.equal(courtSq.longitude, hasCoordinates ? -73.943832 : undefined);
-    assert.equal(stops.find((stop) => stop.id === "G26").latitude, 40.731352);
-  });
-}
-
-test("parses quoted station names with commas", () => {
-  assert.equal(parseStops(stopsCsv).find((stop) => stop.id === "G26").name,
-    "Greenpoint Av, Brooklyn");
+test("generated stops.json contains station coordinates", () => {
+  const stops = JSON.parse(fs.readFileSync(path.join(projectRoot, "stops.json"), "utf8"));
+  const courtSq = stops.find((stop) => stop.id === "G22");
+  assert.ok(courtSq, "Court Sq exists in stops.json");
+  assert.equal(courtSq.latitude, 40.746554);
+  assert.equal(courtSq.longitude, -73.943832);
+  assert.equal(stops.find((stop) => stop.id === "G26").latitude, 40.731352);
 });
 
 test("renders OpenStreetMap slippy map with G-line polyline and interpolated live train positions", async () => {

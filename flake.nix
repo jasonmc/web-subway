@@ -95,6 +95,30 @@
           url = "https://raw.githubusercontent.com/chriswhong/nyc-neighborhood-boundaries/a14c924b16ce659d034ab15a8f45229b05a1f1f5/src/data/nyc-neighborhood-boundaries.geojson";
           hash = "sha256-Y+4f3fM1hNnRKyFMcqyYIEE57TnRlKrxUhq+XdqJU9c=";
         };
+        gtfsSubwayZip = pkgs.fetchurl {
+          name = "gtfs_subway.zip";
+          url = "https://web.archive.org/web/20261005200916if_/https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip";
+          hash = "sha256-LJ5puCrFlqL+ZgtWZWUJVwz7o8LkxQvnXq9iTu4bxvg=";
+        };
+        stopsJson = pkgs.runCommand "stops.json" {
+          nativeBuildInputs = [ pkgs.unzip pkgs.sqlite ];
+        } ''
+          unzip -p ${gtfsSubwayZip} stops.txt | tr -d '\r' > stops.csv
+          sqlite3 :memory: \
+            ".import --csv stops.csv stops" \
+            "SELECT json_group_array(json_object(
+               'id', stop_id,
+               'name', stop_name,
+               'latitude', CAST(stop_lat AS REAL),
+               'longitude', CAST(stop_lon AS REAL)
+             ))
+             FROM (
+               SELECT stop_id, stop_name, stop_lat, stop_lon
+               FROM stops
+               WHERE location_type = '1'
+               ORDER BY stop_name COLLATE NOCASE
+             );" > $out
+        '';
         mapSvg = pkgs.runCommand "g_corridor.svg" {
           nativeBuildInputs = [ pkgs.gdalMinimal ];
         } ''
@@ -107,6 +131,7 @@
           npmBuildScript = "build";
           preBuild = ''
             cp ${mapSvg} g_corridor.svg
+            cp ${stopsJson} stops.json
           '';
           installPhase = ''
             runHook preInstall
@@ -127,6 +152,7 @@
           npmBuildScript = "test:e2e";
           preBuild = ''
             cp ${mapSvg} g_corridor.svg
+            cp ${stopsJson} stops.json
           '';
           installPhase = ''
             runHook preInstall
@@ -137,12 +163,14 @@
       in {
         packages.default = web;
         packages.map-svg = mapSvg;
+        packages.stops-json = stopsJson;
         checks.e2e = tests;
         devShells.default = pkgs.mkShell {
           inputsFrom = [ web ];
           packages = [ pkgs.curl pkgs.gdalMinimal pkgs.osmium-tool ];
           shellHook = ''
             ln -sf ${mapSvg} g_corridor.svg
+            ln -sf ${stopsJson} stops.json
           '';
         };
       });

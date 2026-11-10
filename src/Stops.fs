@@ -4,10 +4,9 @@ open Browser
 open Fable.Core
 open Config
 open State
-open ParseStops
 
-[<ImportDefault("../all_stops.csv?raw")>]
-let private stopsCsv: string = jsNative
+[<ImportDefault("../stops.json")>]
+let private stopOptions: StopOption array = jsNative
 
 let private stopFromLocation () : string option =
     try
@@ -17,7 +16,6 @@ let private stopFromLocation () : string option =
     with _ -> None
 
 let initStops () =
-    let stopOptions = parseStops stopsCsv
     let stopLookup = stopOptions |> Array.map (fun s -> s.id, s) |> Map.ofArray
     let fallback = {
         id = DEFAULT_STOP_ID_PREFIX

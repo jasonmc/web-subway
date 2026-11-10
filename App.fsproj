@@ -5,7 +5,6 @@
   <ItemGroup>
     <Compile Include="src/Config.fs" />
     <Compile Include="src/State.fs" />
-    <Compile Include="src/ParseStops.fs" />
     <Compile Include="src/Stops.fs" />
     <Compile Include="src/Location.fs" />
     <Compile Include="src/Feed.fs" />
