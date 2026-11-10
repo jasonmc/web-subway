@@ -1,11 +1,13 @@
 module Config
 
+open System
 open System.Text.RegularExpressions
 
 [<AutoOpen>]
 module Prelude =
     let inline (|?) (opt: 'T option) (fallback: 'T) : 'T = Option.defaultValue fallback opt
     let inline (<|>) (a: 'T option) (b: 'T option) : 'T option = Option.orElse b a
+    let inline isFinite (v: float) : bool = not (Double.IsNaN v || Double.IsInfinity v)
 
 let DEFAULT_FEED_URL = "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g"
 let DEFAULT_STOP_ID_PREFIX = "G26"

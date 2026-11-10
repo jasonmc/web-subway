@@ -1,11 +1,11 @@
 module State
 
-open Fable.Core
+open System
 
 type Direction = Northbound | Southbound | Other
 
 type Arrival = {
-    time: JS.Date
+    time: DateTime
     route: string
     direction: Direction
     tripId: string option

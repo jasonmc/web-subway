@@ -1,5 +1,6 @@
 module Main
 
+open System
 open Fable.Core
 open Fable.Core.JsInterop
 open Elmish
@@ -24,9 +25,6 @@ let private envFeedUrl: string option = jsNative
 
 [<Emit("fetch($0, { mode: 'cors' })")>]
 let private fetchCors (url: string) : JS.Promise<IResponse> = jsNative
-
-[<Emit("($0 instanceof Error ? $0.message : 'Failed to load arrivals.')")>]
-let private errorMessage (err: obj) : string = jsNative
 
 let private fetchAndParse (stopIdPrefix: string) () : Async<Set<string> * ArrivalGroup * FeedMeta * RawTrainTrip array> = async {
     let! res = Async.AwaitPromise(fetchCors (envFeedUrl |? DEFAULT_FEED_URL))
@@ -113,9 +111,10 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
             (fetchAndParse model.selectedStopPrefix)
             ()
             (Ok >> FeedLoaded)
-            (fun err ->
-                JS.console.error err
-                Error (errorMessage err) |> FeedLoaded)
+            (fun ex ->
+                JS.console.error ex
+                let msg = if String.IsNullOrEmpty ex.Message then "Failed to load arrivals." else ex.Message
+                Error msg |> FeedLoaded)
 
     | FeedLoaded (Ok (available, arrivals, meta, rawTrips)) ->
         let nextAvailable =

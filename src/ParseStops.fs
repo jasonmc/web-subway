@@ -2,7 +2,6 @@ module ParseStops
 
 open System
 open System.Text.RegularExpressions
-open Fable.Core
 open Config
 open State
 
@@ -18,12 +17,6 @@ let private parseCsvLine (line: string) : string array =
             | ',', false -> loop (i + 1) false "" (cur :: acc)
             | ch, _ -> loop (i + 1) inQuotes (cur + string ch) acc
     loop 0 false "" []
-
-[<Emit("$0.localeCompare($1, 'en')")>]
-let private localeCompareEn (a: string) (b: string) : int = jsNative
-
-[<Emit("Number.isFinite($0)")>]
-let private isFinite (v: float) : bool = jsNative
 
 let private (|ValidCoord|_|) maxAbs (raw: string option) =
     match raw with
@@ -59,4 +52,4 @@ let parseStops (csv: string) : StopOption array =
                 Some { id = baseId; name = stopName; latitude = lat; longitude = lon }
             | _ -> None)
         |> Array.distinctBy _.id
-        |> Array.sortWith (fun a b -> localeCompareEn a.name b.name)
+        |> Array.sortWith (fun a b -> String.Compare(a.name, b.name, StringComparison.OrdinalIgnoreCase))

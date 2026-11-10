@@ -111,14 +111,11 @@ type IGtfsModule = abstract transit_realtime: ITransitRealtime
 [<ImportAll("gtfs-realtime-bindings")>]
 let private gtfs: IGtfsModule = jsNative
 
-[<Emit("new Date()")>]
-let createNowDate () : JS.Date = jsNative
+let createDateMs (ms: float) : DateTime =
+    JS.Constructors.Date.Create(ms)
 
-[<Emit("new Date($0)")>]
-let createDateMs (ms: float) : JS.Date = jsNative
-
-[<Emit("Math.round($0)")>]
-let jsRound (value: float) : int = jsNative
+let private roundInt (value: float) : int =
+    int (Math.Round(value, MidpointRounding.AwayFromZero))
 
 let decodeFeed (buf: JS.ArrayBuffer) : IFeedMessage =
     gtfs.transit_realtime.FeedMessage.decode(JS.Constructors.Uint8Array.Create(buf))
@@ -160,7 +157,7 @@ let private smoothProgress (rawP: float) : float =
 
 // Snap wall clock into the feed's clock frame if MTA has a DST/timezone offset (> 25 min skew)
 let effectiveNowSec (headerTimestampMs: float option) : float =
-    let wallSec = (createNowDate ()).getTime() / 1000.0
+    let wallSec = JS.Constructors.Date.now() / 1000.0
     match headerTimestampMs with
     | Some ms when ms > 0.0 ->
         let diff = ms / 1000.0 - wallSec
@@ -389,19 +386,19 @@ let private formatHoursMinutes (m: int) (suffix: string) =
     | h, 0 -> $"{h}h{suffix}"
     | h, min -> $"{h}h {min}m{suffix}"
 
-let formatRelative (target: JS.Date) : string =
-    match jsRound ((target.getTime() - (createNowDate ()).getTime()) / 60000.0) with
+let formatRelative (target: DateTime) : string =
+    match roundInt (target - DateTime.Now).TotalMinutes with
     | m when m <= 0 -> "due"
     | 1 -> "in 1 min"
     | m when m < 60 -> $"in {m} min"
     | m -> "in " + formatHoursMinutes m ""
 
-let formatAge (target: JS.Date) : string =
-    match jsRound (((createNowDate ()).getTime() - target.getTime()) / 1000.0) with
+let formatAge (target: DateTime) : string =
+    match roundInt (DateTime.Now - target).TotalSeconds with
     | s when s <= 0 -> "just now"
     | s when s < 60 -> $"{s}s ago"
     | s ->
-        match jsRound (float s / 60.0) with
+        match roundInt (float s / 60.0) with
         | 1 -> "1 min ago"
         | m when m < 60 -> $"{m} min ago"
         | m -> formatHoursMinutes m " ago"
@@ -409,13 +406,13 @@ let formatAge (target: JS.Date) : string =
 let headway (current: Arrival) (next: Arrival option) : string =
     match next with
     | Some n ->
-        match jsRound ((n.time.getTime() - current.time.getTime()) / 60000.0) with
+        match roundInt (n.time - current.time).TotalMinutes with
         | m when m > 0 -> $" • next in {m}m"
         | _ -> ""
     | None -> ""
 
 let parseFeed (feed: IFeedMessage) (stopIdPrefix: string) : ArrivalGroup * FeedMeta =
-    let nowMs = (createNowDate ()).getTime()
+    let currentNow = DateTime.Now
     let headerTimestampMs =
         feed.header
         |> Option.bind (fun h -> toInt h.timestamp)
@@ -444,7 +441,7 @@ let parseFeed (feed: IFeedMessage) (stopIdPrefix: string) : ArrivalGroup * FeedM
                            match stu.arrival, stu.departure with
                            | EventTime ts, _ | _, EventTime ts ->
                                let whenDate = createDateMs (ts * 1000.0)
-                               if whenDate.getTime() >= nowMs then
+                               if whenDate >= currentNow then
                                    let dir =
                                        if stopId.EndsWith("N") then Northbound
                                        elif stopId.EndsWith("S") then Southbound
@@ -452,7 +449,7 @@ let parseFeed (feed: IFeedMessage) (stopIdPrefix: string) : ArrivalGroup * FeedM
                                    { time = whenDate; route = route; direction = dir; tripId = Some tripId; label = None }
                            | _ -> ()
                        | _ -> () |]
-        |> Array.sortBy (fun a -> a.time.getTime())
+        |> Array.sortBy _.time
 
     let byDir d = allArrivals |> Array.filter (fun a -> a.direction = d)
     { Northbound = byDir Northbound; Southbound = byDir Southbound; Other = byDir Other },

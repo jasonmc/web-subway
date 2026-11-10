@@ -1,7 +1,6 @@
 module Ui
 
 open System
-open Fable.Core
 open Browser
 open Browser.Types
 open Feliz
@@ -11,17 +10,19 @@ open State
 open Stops
 open Feed
 
-[<Emit("(() => { try { const u = new URL(window.location.href); u.hash = $0; window.history.replaceState({}, '', u); } catch {} })()")>]
-let syncStopParam (stopPrefix: string) : unit = jsNative
+let syncStopParam (stopPrefix: string) : unit =
+    try window.history.replaceState(null, "", $"#{stopPrefix}")
+    with _ -> ()
 
-[<Emit("(() => { const el = document.querySelector('#status'); if (el) { el.textContent = $0; el.className = 'status error'; } })()")>]
-let setError (message: string) : unit = jsNative
+let setError (message: string) : unit =
+    match document.querySelector "#status" with
+    | null -> ()
+    | el ->
+        el.textContent <- message
+        el.className <- "status error"
 
-[<Import("flushSync", "react-dom")>]
-let private flushSync (fn: unit -> unit) : unit = jsNative
-
-[<Emit("$0.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })")>]
-let private formatLocaleTime (d: JS.Date) : string = jsNative
+[<Fable.Core.Import("flushSync", "react-dom")>]
+let private flushSync (fn: unit -> unit) : unit = Fable.Core.Util.jsNative
 
 let private describeTrainForStop (model: Model) (train: EstimatedTrain) : string =
     if train.nextStopId = model.selectedStopPrefix then
@@ -59,7 +60,7 @@ let private renderArrivals (model: Model) (dispatch: Dispatch<Msg>) (arrivals: A
                     |> Array.mapi (fun i a ->
                         let rel = formatRelative a.time
                         let hw = headway a (Array.tryItem (i + 1) visible)
-                        let t = formatLocaleTime a.time
+                        let t = a.time.ToString("h:mm tt")
                         let matchedTrain = a.tripId |> Option.bind (fun tid -> Map.tryFind tid trainByTrip)
                         let isSpotlight =
                             match a.tripId, model.spotlightTripId with

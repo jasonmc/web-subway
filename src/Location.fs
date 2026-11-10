@@ -5,9 +5,6 @@ open Fable.Core
 open Config
 open State
 
-[<Emit("Number.isFinite($0)")>]
-let private isFinite (v: float) : bool = jsNative
-
 let private nearestStop (stopLookup: Map<string, StopOption>) (lat: float) (lon: float) : string option =
     if not (isFinite lat && isFinite lon) || abs lat > 90.0 || abs lon > 180.0 then
         None

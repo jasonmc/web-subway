@@ -1,5 +1,6 @@
 module Stops
 
+open Browser
 open Fable.Core
 open Config
 open State
@@ -8,12 +9,9 @@ open ParseStops
 [<ImportDefault("../all_stops.csv?raw")>]
 let private stopsCsv: string = jsNative
 
-[<Emit("new URL(window.location.href).hash.replace(/^#/, '')")>]
-let private rawLocationHash () : string = jsNative
-
 let private stopFromLocation () : string option =
     try
-        match rawLocationHash () with
+        match window.location.hash.TrimStart('#') with
         | "" | null -> None
         | h -> Some h
     with _ -> None
