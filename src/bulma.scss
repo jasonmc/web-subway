@@ -1,0 +1,21 @@
+/*! bulma.io v1.0.4 | MIT License | github.com/jgthms/bulma */
+// Only import modules used by the Feliz.Bulma views in Ui.fs.
+@use "bulma/sass/utilities";
+@use "bulma/sass/base/minireset";
+@use "bulma/sass/base/generic";
+@use "bulma/sass/elements/title";
+@use "bulma/sass/elements/notification";
+@use "bulma/sass/form/select";
+@use "bulma/sass/form/tools";
+@use "bulma/sass/components/card";
+@use "bulma/sass/grid/columns";
+@use "bulma/sass/helpers/spacing";
+
+// The HTML shell explicitly selects the light theme; omit unused dark themes.
+@use "bulma/sass/themes/light";
+@use "bulma/sass/themes/setup";
+
+:root {
+  @include light.light-theme;
+  @include setup.setup-theme;
+}

@@ -29,7 +29,7 @@ The stops CSV is embedded directly in the single HTML build. Enable HTTP compres
 
 ## Styling
 
-Standard UI components use Feliz.Bulma 5 and bundled Bulma 1 CSS. Use the Feliz.Bulma API in `src/Ui.fs` for cards, form fields, notifications, and columns. `src/style.css` retains the compact feed-age indicator and wider map column, alongside the custom arrival rows and map/animation styles. Other UI styling follows Bulma defaults. Bulma is imported before those styles in `src/Main.fs`; the page explicitly uses its light theme. All CSS remains embedded in the single-file build.
+Standard UI components use Feliz.Bulma 5 and bundled Bulma 1 CSS. Use the Feliz.Bulma API in `src/Ui.fs` for cards, form fields, notifications, and columns. `src/style.css` retains the compact feed-age indicator and wider map column, alongside the custom arrival rows and map/animation styles. Other UI styling follows Bulma defaults. `src/bulma.scss` imports only the Bulma modules the UI uses and its light theme; add new component modules there as needed. This stylesheet is imported before the custom styles in `src/Main.fs`. All CSS remains embedded in the single-file build.
 
 ## Tests
 

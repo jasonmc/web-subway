@@ -11,7 +11,7 @@
       let
         pkgs = import nixpkgs { inherit system; };
         src = pkgs.lib.cleanSource ./.;
-        npmDepsHash = "sha256-mV5sybIl4K+jomLIkl8u+u/elVbX0JltSglhjnhPq4M=";
+        npmDepsHash = "sha256-dbdbZMD3uiidJ4JLsdH1lPswiXygQdnW0zufh8/uyj4=";
         npmInstallFlags = [ "--legacy-peer-deps" ];
         dotnet-sdk = pkgs.dotnetCorePackages.sdk_10_0;
         nugetDeps = map pkgs.dotnetCorePackages.fetchNupkg [
