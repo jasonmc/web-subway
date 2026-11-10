@@ -77,24 +77,25 @@ let init () : Model * Cmd<Msg> =
         spinePosByTrip = Map.empty
         mapTrains = [||]
         userLocation = None
+        spotlightTripId = None
         status = Loading
     }
     let geoCmd =
         if hasUrlStop then Cmd.none
         else Cmd.OfAsync.either (nearestStopFromDevice stopLookup) () GeoResolved (fun _ -> GeoResolved None)
 
-    model, Cmd.batch [ Cmd.ofEffect bindStopSelect; geoCmd; Cmd.ofMsg (RefreshFeed true); startTimersSub ]
+    model, Cmd.batch [ Cmd.ofEffect (fun _ -> syncStopParam selectedStopPrefix); geoCmd; Cmd.ofMsg (RefreshFeed true); startTimersSub ]
 
 // Elmish Update
 let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
     match msg with
     | SelectStop stopId ->
         { model with selectedStopPrefix = stopId; manuallySelected = true },
-        Cmd.batch [ Cmd.ofMsg (RefreshFeed true); startRefreshSub ]
+        Cmd.batch [ Cmd.ofEffect (fun _ -> syncStopParam stopId); Cmd.ofMsg (RefreshFeed true); startRefreshSub ]
 
     | GeoResolved (Some (stopId, coords)) when not model.manuallySelected && not model.hasUrlStop ->
         { model with selectedStopPrefix = stopId; userLocation = Some coords },
-        Cmd.ofMsg (RefreshFeed false)
+        Cmd.batch [ Cmd.ofEffect (fun _ -> syncStopParam stopId); Cmd.ofMsg (RefreshFeed false) ]
 
     | GeoResolved (Some (_, coords)) ->
         { model with userLocation = Some coords }, Cmd.none
@@ -141,6 +142,14 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
         { model with fetching = false; status = ErrorMessage message },
         Cmd.none
 
+    | SetSpotlight tripIdOpt ->
+        if model.spotlightTripId = tripIdOpt then model, Cmd.none
+        else { model with spotlightTripId = tripIdOpt }, Cmd.none
+
+    | ToggleSpotlight tripId ->
+        let next = if model.spotlightTripId = Some tripId then None else Some tripId
+        { model with spotlightTripId = next }, Cmd.none
+
     | TickAge ->
         let nextStatus =
             match model.lastFeedTimestampMs with
@@ -151,6 +160,7 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
 
 try
     Program.mkProgram init update view
+    |> withReactRoot
     |> Program.run
 with err ->
     JS.console.error err

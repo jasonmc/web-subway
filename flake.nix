@@ -11,10 +11,40 @@
       let
         pkgs = import nixpkgs { inherit system; };
         src = pkgs.lib.cleanSource ./.;
-        npmDepsHash = "sha256-Xs12fZ3MpJHm2LuOvZ77XJV71eyR5C3LRbSRhpVBFkE=";
+        npmDepsHash = "sha256-tk/GDy/5hx/QQE0X/0ES1dlKhl2X1rvhxDl3RYymz40=";
         npmInstallFlags = [ "--legacy-peer-deps" ];
         dotnet-sdk = pkgs.dotnetCorePackages.sdk_10_0;
         nugetDeps = map pkgs.dotnetCorePackages.fetchNupkg [
+          {
+            pname = "Fable.AST";
+            version = "5.0.0-rc.3";
+            hash = "sha256-V1ziznJ7ZSgcw+Be4XvJgrC6BTzeLULppanw0LA9bzw=";
+          }
+          {
+            pname = "Fable.Browser.Blob";
+            version = "1.1.4";
+            hash = "sha256-NH0maz+vS0lLLcl0ttVPtqxTodE0IMGJ4QWUQegcAqs=";
+          }
+          {
+            pname = "Fable.Browser.Dom";
+            version = "2.4.4";
+            hash = "sha256-414N5oHz1u0gBkJW+EarRR8E4elKAm2s3tVCnZX0KM4=";
+          }
+          {
+            pname = "Fable.Browser.Event";
+            version = "1.4.4";
+            hash = "sha256-SOA47R1wmWm3CD92w4e57/nHvKF7V7tSRvfPHRahG+k=";
+          }
+          {
+            pname = "Fable.Browser.Gamepad";
+            version = "1.0.3";
+            hash = "sha256-Sh+bNU9+NdJ9KXv6jn8nH1YWgmVYvk1DxpskHgNGBYM=";
+          }
+          {
+            pname = "Fable.Browser.WebStorage";
+            version = "1.0.4";
+            hash = "sha256-d5jFgiNAEl2btC63CbC4xgr5J1jgSPqr/pP/NIwZejY=";
+          }
           {
             pname = "Fable.Core";
             version = "4.5.0";
@@ -24,6 +54,26 @@
             pname = "Fable.Elmish";
             version = "5.0.2";
             hash = "sha256-R6r6AhDnYpS2+u5a4pN+S0+Q0JxtvtjsFUfGt9OG4ok=";
+          }
+          {
+            pname = "Fable.React.Types";
+            version = "18.4.0";
+            hash = "sha256-n9UNdOl3Lja4IsBbJUacAsycAEIiNz2lTH5u+kK6LKA=";
+          }
+          {
+            pname = "Fable.ReactDom.Types";
+            version = "18.2.0";
+            hash = "sha256-32EA2PxwDuctsTt3bNfLWwM3AoiEN9CeH+SLUaHlAKY=";
+          }
+          {
+            pname = "Feliz";
+            version = "3.3.3";
+            hash = "sha256-LJNBOBzD3IxPu8WglzWlrVAEP6dJ6Fwrayn26wzfQQc=";
+          }
+          {
+            pname = "Feliz.CompilerPlugins";
+            version = "3.2.0";
+            hash = "sha256-pidFT/BU+Zsn4vcyFjyyYlTsDZVLWmNGYeoNxqPpOLw=";
           }
           {
             pname = "FSharp.Core";

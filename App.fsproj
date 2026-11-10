@@ -16,5 +16,6 @@
   <ItemGroup>
     <PackageReference Include="Fable.Core" Version="4.5.0" />
     <PackageReference Include="Fable.Elmish" Version="5.0.2" />
+    <PackageReference Include="Feliz" Version="3.3.3" />
   </ItemGroup>
 </Project>

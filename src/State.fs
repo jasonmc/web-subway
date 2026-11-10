@@ -73,6 +73,7 @@ type Model = {
     spinePosByTrip: Map<string, float * float>
     mapTrains: EstimatedTrain array
     userLocation: (float * float) option
+    spotlightTripId: string option
     status: StatusDisplay
 }
 
@@ -82,4 +83,6 @@ type Msg =
     | GeoResolved of (string * (float * float)) option
     | RefreshFeed of showLoading: bool
     | FeedLoaded of Result<Set<string> * ArrivalGroup * FeedMeta * RawTrainTrip array, string>
+    | SetSpotlight of string option
+    | ToggleSpotlight of string
     | TickAge

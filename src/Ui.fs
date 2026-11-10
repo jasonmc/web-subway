@@ -2,65 +2,26 @@ module Ui
 
 open System
 open Fable.Core
+open Browser
+open Browser.Types
+open Feliz
 open Elmish
 open Config
 open State
 open Stops
 open Feed
 
-type IDomElement =
-    abstract className: string with get, set
-    abstract textContent: string with get, set
-    abstract innerHTML: string with get, set
-    abstract value: string with get, set
-    abstract addEventListener: string * (obj -> unit) -> unit
-
-[<Emit("document.querySelector($0)")>]
-let private querySelector (selector: string) : IDomElement option = jsNative
-
-let private requiredElement (selector: string) : IDomElement =
-    querySelector selector
-    |> Option.defaultWith (fun () -> failwith $"Missing required UI element: {selector}")
-
-let private statusEl = requiredElement "#status"
-let private listsEl = requiredElement "#lists"
-let private stopSelect = requiredElement "#stop-select"
-let private stopNameEl = requiredElement "#stop-name"
-let private mapElOpt = querySelector "#map"
-
-let private lastRenderedStopsKey = ref ""
-let private lastSyncedStop = ref ""
-let private lastRenderedListsHtml = ref ""
-let private lastRenderedMapStopsHtml = ref ""
-let private lastRenderedTrainsHtml = ref ""
-let private spotlightTripId : string option ref = ref None
-
-[<Emit("""(() => {
-  const tripId = $0;
-  if (typeof document.querySelectorAll !== 'function') return;
-  for (const el of document.querySelectorAll('[data-trip-id]') || []) {
-    el.classList.toggle('is-spotlight', Boolean(tripId && el.getAttribute('data-trip-id') === tripId));
-  }
-})()""")>]
-let private syncSpotlightDom (tripIdOpt: string option) : unit = jsNative
-
-[<Emit("($0 && $0.target && $0.target.closest ? ($0.target.closest('[' + $1 + ']')?.getAttribute($1) ?? null) : null)")>]
-let private closestAttr (ev: obj) (attr: string) : string option = jsNative
-
 [<Emit("(() => { try { const u = new URL(window.location.href); u.hash = $0; window.history.replaceState({}, '', u); } catch {} })()")>]
-let private syncStopParam (stopPrefix: string) : unit = jsNative
+let syncStopParam (stopPrefix: string) : unit = jsNative
+
+[<Emit("(() => { const el = document.querySelector('#status'); if (el) { el.textContent = $0; el.className = 'status error'; } })()")>]
+let setError (message: string) : unit = jsNative
+
+[<Import("flushSync", "react-dom")>]
+let private flushSync (fn: unit -> unit) : unit = jsNative
 
 [<Emit("$0.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })")>]
 let private formatLocaleTime (d: JS.Date) : string = jsNative
-
-let setStatusText (text: string) (isError: bool) =
-    statusEl.className <- if isError then "status error" else "status"
-    statusEl.textContent <- text
-
-let setError (message: string) =
-    setStatusText message true
-    listsEl.innerHTML <- ""
-    lastRenderedListsHtml.Value <- ""
 
 let private describeTrainForStop (model: Model) (train: EstimatedTrain) : string =
     if train.nextStopId = model.selectedStopPrefix then
@@ -75,21 +36,21 @@ let private describeTrainForStop (model: Model) (train: EstimatedTrain) : string
         let actionText = if train.isStopped then $"At {nextName}" else $"Approaching {nextName}"
         $"{actionText} · {stopsText}"
 
-let private renderArrivals (model: Model) (arrivals: ArrivalGroup) =
+let private renderArrivals (model: Model) (dispatch: Dispatch<Msg>) (arrivals: ArrivalGroup) : ReactElement list =
     let trainByTrip =
         model.mapTrains
         |> Array.map (fun t -> t.tripId, t)
         |> Map.ofArray
 
-    let cards = [|
+    let cards = [
         "Northbound", "⬆️", arrivals.Northbound
         "Southbound", "⬇️", arrivals.Southbound
         "Other", "⬜", arrivals.Other
-    |]
+    ]
 
-    let html =
+    let renderedCards =
         cards
-        |> Array.choose (fun (title, icon, items) ->
+        |> List.choose (fun (title, icon, items) ->
             match Array.truncate ARRIVALS_PER_DIRECTION items with
             | [||] -> None
             | visible ->
@@ -100,65 +61,117 @@ let private renderArrivals (model: Model) (arrivals: ArrivalGroup) =
                         let hw = headway a (Array.tryItem (i + 1) visible)
                         let t = formatLocaleTime a.time
                         let matchedTrain = a.tripId |> Option.bind (fun tid -> Map.tryFind tid trainByTrip)
-                        let tripAttr =
+                        let isSpotlight =
+                            match a.tripId, model.spotlightTripId with
+                            | Some tid, Some s when tid = s -> true
+                            | _ -> false
+                        let isNext = i = 0 && Option.isSome matchedTrain
+                        let cls =
+                            "arrival"
+                            + (if isNext then " arrival-next" else "")
+                            + (if isSpotlight then " is-spotlight" else "")
+                        Html.div [
+                            prop.key (a.tripId |? $"{title}-{i}")
+                            prop.className cls
                             match a.tripId with
-                            | Some tid -> $" data-trip-id=\"{tid}\""
-                            | None -> ""
-                        let spotlightCls =
-                            match a.tripId, spotlightTripId.Value with
-                            | Some tid, Some s when tid = s -> " is-spotlight"
-                            | _ -> ""
-                        let nextCls = if i = 0 && Option.isSome matchedTrain then " arrival-next" else ""
-                        let whereHtml =
-                            match matchedTrain with
-                            | Some tr ->
-                                let desc = describeTrainForStop model tr
-                                $"<div class=\"arrival-where\">{desc}</div>"
-                            | None -> ""
-                        $"<div class=\"arrival{nextCls}{spotlightCls}\"{tripAttr}><div class=\"arrival-main\"><div><span class=\"route\">{a.route}</span><span class=\"meta\"> {rel}{hw}</span></div>{whereHtml}</div><span class=\"time\">{t}</span></div>")
-                    |> String.concat ""
-                Some $"<article class=\"card\"><h2>{icon} {title}</h2>{rows}</article>")
-        |> String.concat ""
+                            | Some tid ->
+                                prop.custom ("data-trip-id", tid)
+                                prop.onMouseOver (fun _ -> dispatch (SetSpotlight (Some tid)))
+                                prop.onMouseOut (fun _ -> dispatch (SetSpotlight None))
+                                prop.onClick (fun _ -> dispatch (ToggleSpotlight tid))
+                            | None -> ()
+                            prop.children [
+                                Html.div [
+                                    prop.className "arrival-main"
+                                    prop.children [
+                                        Html.div [
+                                            Html.span [ prop.className "route"; prop.text a.route ]
+                                            Html.span [ prop.className "meta"; prop.text $" {rel}{hw}" ]
+                                        ]
+                                        match matchedTrain with
+                                        | Some tr ->
+                                            Html.div [
+                                                prop.className "arrival-where"
+                                                prop.text (describeTrainForStop model tr)
+                                            ]
+                                        | None -> ()
+                                    ]
+                                ]
+                                Html.span [ prop.className "time"; prop.text t ]
+                            ]
+                        ])
+                Some (
+                    Html.article [
+                        prop.key title
+                        prop.className "card"
+                        prop.children [
+                            Html.h2 $"{icon} {title}"
+                            yield! rows
+                        ]
+                    ]
+                ))
 
-    let nextHtml =
-        if String.IsNullOrWhiteSpace(html) then
-            "<article class=\"card\"><p class=\"meta\">No arrivals in the feed.</p></article>"
-        else
-            html
+    if List.isEmpty renderedCards then
+        [ Html.article [
+              prop.className "card"
+              prop.children [
+                  Html.p [ prop.className "meta"; prop.text "No arrivals in the feed." ]
+              ]
+          ] ]
+    else
+        renderedCards
 
-    if nextHtml <> lastRenderedListsHtml.Value then
-        listsEl.innerHTML <- nextHtml
-        lastRenderedListsHtml.Value <- nextHtml
-
-let private buildUserLocationHtml (model: Model) : string =
-    match model.userLocation with
-    | Some (lat, lon) ->
-        let px, py = projectToMapPx lat lon
-        if px >= 0.0 && px <= MAP_WIDTH && py >= 0.0 && py <= MAP_HEIGHT then
-            let leftPct, topPct = pxToMapPercent px py
-            $"<div class=\"osm-user-location\" data-lat=\"{lat}\" data-lon=\"{lon}\" title=\"Your location\" aria-label=\"Your location\" style=\"left:{leftPct};top:{topPct}\"><span class=\"osm-user-pulse\"></span><span class=\"osm-user-dot\"></span></div>"
-        else
-            ""
-    | None -> ""
-
-let private buildStationsHtml (model: Model) : string =
-    let stopsHtml =
+let private renderStations (model: Model) (dispatch: Dispatch<Msg>) : ReactElement list =
+    let stops =
         PREFERRED_STOP_ORDER
         |> Array.choose (fun id ->
             match Map.tryFind id model.stopLookup with
             | Some { name = name; latitude = Some lat; longitude = Some lon } ->
                 let leftPct, topPct = projectToMapPercent lat lon
                 let isSelected = id = model.selectedStopPrefix
-                let cls = if isSelected then "osm-stop osm-stop-selected" else "osm-stop"
-                let labelHtml =
-                    if isSelected then $"<span class=\"osm-stop-label\">{name}</span>"
-                    else ""
-                Some $"<button type=\"button\" class=\"{cls}\" data-stop-id=\"{id}\" title=\"{name}\" style=\"left:{leftPct};top:{topPct}\">{labelHtml}</button>"
+                Some (
+                    Html.button [
+                        prop.key id
+                        prop.type'.button
+                        prop.className (if isSelected then "osm-stop osm-stop-selected" else "osm-stop")
+                        prop.custom ("data-stop-id", id)
+                        prop.title name
+                        prop.style [ style.custom ("left", leftPct); style.custom ("top", topPct) ]
+                        prop.onClick (fun _ -> dispatch (SelectStop id))
+                        prop.children [
+                            if isSelected then
+                                Html.span [ prop.className "osm-stop-label"; prop.text name ]
+                        ]
+                    ]
+                )
             | _ -> None)
-        |> String.concat ""
-    stopsHtml + buildUserLocationHtml model
+        |> Array.toList
 
-let private buildTrainsHtml (model: Model) : string =
+    let userLoc =
+        match model.userLocation with
+        | Some (lat, lon) ->
+            let px, py = projectToMapPx lat lon
+            if px >= 0.0 && px <= MAP_WIDTH && py >= 0.0 && py <= MAP_HEIGHT then
+                let leftPct, topPct = pxToMapPercent px py
+                [ Html.div [
+                      prop.key "user-location"
+                      prop.className "osm-user-location"
+                      prop.custom ("data-lat", string lat)
+                      prop.custom ("data-lon", string lon)
+                      prop.title "Your location"
+                      prop.ariaLabel "Your location"
+                      prop.style [ style.custom ("left", leftPct); style.custom ("top", topPct) ]
+                      prop.children [
+                          Html.span [ prop.className "osm-user-pulse" ]
+                          Html.span [ prop.className "osm-user-dot" ]
+                      ]
+                  ] ]
+            else []
+        | None -> []
+
+    stops @ userLoc
+
+let private renderTrains (model: Model) (dispatch: Dispatch<Msg>) : ReactElement list =
     let nextIncomingTrips =
         match model.lastArrivals with
         | None -> Set.empty
@@ -199,101 +212,191 @@ let private buildTrainsHtml (model: Model) : string =
         let cls =
             "osm-train"
             + (if isNext then " osm-train-next" elif isPassed then " osm-train-passed" else "")
-            + (if spotlightTripId.Value = Some t.tripId then " is-spotlight" else "")
-        let svgHtml =
-            $"<svg class=\"osm-train-svg\" viewBox=\"0 0 28 28\" aria-hidden=\"true\"><g class=\"osm-train-dir\" transform=\"rotate({headingStr} 14 14)\"><path class=\"osm-train-badge\" d=\"M14 1.2 L19.2 7.8 A9.2 9.2 0 1 1 8.8 7.8 Z\"/></g><rect class=\"osm-train-car\" x=\"9.5\" y=\"9.2\" width=\"9\" height=\"9.2\" rx=\"2.2\"/><line class=\"osm-train-line\" x1=\"9.5\" y1=\"14.2\" x2=\"18.5\" y2=\"14.2\"/><circle class=\"osm-train-light\" cx=\"11.8\" cy=\"16.4\" r=\"0.95\"/><circle class=\"osm-train-light\" cx=\"16.2\" cy=\"16.4\" r=\"0.95\"/><line class=\"osm-train-rail\" x1=\"11.2\" y1=\"18.4\" x2=\"10.2\" y2=\"20.2\"/><line class=\"osm-train-rail\" x1=\"16.8\" y1=\"18.4\" x2=\"17.8\" y2=\"20.2\"/></svg>"
-        $"<div class=\"{cls}\" data-trip-id=\"{t.tripId}\" data-lat=\"{t.latitude}\" data-lon=\"{t.longitude}\" data-heading=\"{headingStr}\" title=\"{statusLabel}\" style=\"left:{leftPct};top:{topPct}\">{svgHtml}</div>")
-    |> String.concat ""
+            + (if model.spotlightTripId = Some t.tripId then " is-spotlight" else "")
+        Html.div [
+            prop.key t.tripId
+            prop.className cls
+            prop.custom ("data-trip-id", t.tripId)
+            prop.custom ("data-lat", string t.latitude)
+            prop.custom ("data-lon", string t.longitude)
+            prop.custom ("data-heading", headingStr)
+            prop.title statusLabel
+            prop.style [ style.custom ("left", leftPct); style.custom ("top", topPct) ]
+            prop.onMouseOver (fun _ -> dispatch (SetSpotlight (Some t.tripId)))
+            prop.onMouseOut (fun _ -> dispatch (SetSpotlight None))
+            prop.onClick (fun _ -> dispatch (ToggleSpotlight t.tripId))
+            prop.children [
+                Svg.svg [
+                    svg.className "osm-train-svg"
+                    svg.viewBox (0, 0, 28, 28)
+                    svg.custom ("aria-hidden", "true")
+                    svg.children [
+                        Svg.g [
+                            svg.className "osm-train-dir"
+                            svg.custom ("transform", $"rotate({headingStr} 14 14)")
+                            svg.children [
+                                Svg.path [ svg.className "osm-train-badge"; svg.d "M14 1.2 L19.2 7.8 A9.2 9.2 0 1 1 8.8 7.8 Z" ]
+                            ]
+                        ]
+                        Svg.rect [ svg.className "osm-train-car"; svg.x 9.5; svg.y 9.2; svg.width 9.0; svg.height 9.2; svg.rx 2.2 ]
+                        Svg.line [ svg.className "osm-train-line"; svg.x1 9.5; svg.y1 14.2; svg.x2 18.5; svg.y2 14.2 ]
+                        Svg.circle [ svg.className "osm-train-light"; svg.cx 11.8; svg.cy 16.4; svg.r 0.95 ]
+                        Svg.circle [ svg.className "osm-train-light"; svg.cx 16.2; svg.cy 16.4; svg.r 0.95 ]
+                        Svg.line [ svg.className "osm-train-rail"; svg.x1 11.2; svg.y1 18.4; svg.x2 10.2; svg.y2 20.2 ]
+                        Svg.line [ svg.className "osm-train-rail"; svg.x1 16.8; svg.y1 18.4; svg.x2 17.8; svg.y2 20.2 ]
+                    ]
+                ]
+            ]
+        ])
+    |> Array.toList
 
-let private renderMap (model: Model) =
-    match mapElOpt with
-    | None -> ()
-    | Some mapEl ->
-        let stationsHtml = buildStationsHtml model
-        let trainsHtml = buildTrainsHtml model
-        match querySelector "#osm-stops", querySelector "#osm-trains" with
-        | Some stopsEl, Some trainsEl ->
-            if stationsHtml <> lastRenderedMapStopsHtml.Value then
-                stopsEl.innerHTML <- stationsHtml
-                lastRenderedMapStopsHtml.Value <- stationsHtml
-            if trainsHtml <> lastRenderedTrainsHtml.Value then
-                trainsEl.innerHTML <- trainsHtml
-                lastRenderedTrainsHtml.Value <- trainsHtml
-        | _ ->
-            if stationsHtml <> lastRenderedMapStopsHtml.Value || trainsHtml <> lastRenderedTrainsHtml.Value then
-                mapEl.innerHTML <-
-                    $"<article class=\"card map-card\"><div class=\"osm-viewport\"><div id=\"osm-tiles\" class=\"osm-tiles\">{STATIC_BASE_SVG}</div><div id=\"osm-stops\" class=\"osm-overlay\">{stationsHtml}</div><div id=\"osm-trains\" class=\"osm-overlay osm-trains-layer\">{trainsHtml}</div><div class=\"osm-attrib\">© <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener noreferrer\">OSM</a> · <a href=\"https://github.com/chriswhong/nyc-neighborhood-boundaries\" target=\"_blank\" rel=\"noopener noreferrer\">Whong</a></div></div></article>"
-                lastRenderedMapStopsHtml.Value <- stationsHtml
-                lastRenderedTrainsHtml.Value <- trainsHtml
+let private renderMap (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
+    Html.article [
+        prop.className "card map-card"
+        prop.children [
+            Html.div [
+                prop.className "osm-viewport"
+                prop.children [
+                    Html.div [
+                        prop.id "osm-tiles"
+                        prop.className "osm-tiles"
+                        prop.dangerouslySetInnerHTML STATIC_BASE_SVG
+                    ]
+                    Html.div [
+                        prop.id "osm-stops"
+                        prop.className "osm-overlay"
+                        prop.children (renderStations model dispatch)
+                    ]
+                    Html.div [
+                        prop.id "osm-trains"
+                        prop.className "osm-overlay osm-trains-layer"
+                        prop.children (renderTrains model dispatch)
+                    ]
+                    Html.div [
+                        prop.className "osm-attrib"
+                        prop.children [
+                            Html.text "© "
+                            Html.a [
+                                prop.href "https://www.openstreetmap.org/copyright"
+                                prop.target.blank
+                                prop.rel "noopener noreferrer"
+                                prop.text "OSM"
+                            ]
+                            Html.text " · "
+                            Html.a [
+                                prop.href "https://github.com/chriswhong/nyc-neighborhood-boundaries"
+                                prop.target.blank
+                                prop.rel "noopener noreferrer"
+                                prop.text "Whong"
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+    ]
 
-let private renderStopSelect (model: Model) =
+let view (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
     let available = model.availableStops |> Option.filter (not << Set.isEmpty)
     let matchingIds =
         PREFERRED_STOP_ORDER
         |> Array.filter (fun id -> available |> Option.forall (Set.contains id))
-
     let finalIds = if matchingIds.Length > 0 then matchingIds else PREFERRED_STOP_ORDER
     let preservedIds =
         if Array.contains model.selectedStopPrefix finalIds then finalIds
         else Array.append [| model.selectedStopPrefix |] finalIds
 
-    let nextKey = String.concat "," preservedIds
-    if nextKey <> lastRenderedStopsKey.Value then
-        stopSelect.innerHTML <-
-            preservedIds
-            |> Array.map (fun id ->
-                let name = model.stopLookup |> Map.tryFind id |> Option.map _.name |? id
-                let sel = if id = model.selectedStopPrefix then "selected" else ""
-                $"<option value=\"{id}\" {sel}>{name}</option>")
-            |> String.concat ""
-        lastRenderedStopsKey.Value <- nextKey
+    let statusText, isError =
+        match model.status with
+        | Loading -> "Loading…", false
+        | ErrorMessage msg -> msg, true
+        | FeedAge tsOpt ->
+            let age =
+                match tsOpt with
+                | Some ms when ms <> 0.0 -> formatAge (createDateMs ms)
+                | _ -> "unknown"
+            $"Feed age: {age}", false
 
-    stopSelect.value <- model.selectedStopPrefix
-    if model.selectedStopPrefix <> lastSyncedStop.Value then
-        stopNameEl.textContent <- stopLabel model.stopLookup model.selectedStopPrefix
-        syncStopParam model.selectedStopPrefix
-        lastSyncedStop.Value <- model.selectedStopPrefix
+    React.Fragment [
+        Html.header [
+            Html.div [
+                Html.p [
+                    prop.className "eyebrow"
+                    prop.children [
+                        Html.text "🚇 "
+                        Html.span [
+                            prop.id "stop-name"
+                            prop.text (stopLabel model.stopLookup model.selectedStopPrefix)
+                        ]
+                    ]
+                ]
+                Html.h1 "Live G train arrivals"
+                Html.p [
+                    prop.className "sub"
+                    prop.text "Your nearest G train station, or choose a station below"
+                ]
+            ]
+            Html.div [
+                prop.className "controls"
+                prop.children [
+                    Html.label [
+                        prop.className "field"
+                        prop.children [
+                            Html.span [ prop.className "label"; prop.text "Station" ]
+                            Html.select [
+                                prop.id "stop-select"
+                                prop.name "stop-select"
+                                prop.value model.selectedStopPrefix
+                                prop.onChange (fun (value: string) -> dispatch (SelectStop value))
+                                prop.children [
+                                    for id in preservedIds do
+                                        let name = model.stopLookup |> Map.tryFind id |> Option.map _.name |? id
+                                        Html.option [
+                                            prop.key id
+                                            prop.value id
+                                            prop.text name
+                                        ]
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
+        Html.section [
+            prop.id "status"
+            prop.className (if isError then "status error" else "status")
+            prop.text statusText
+        ]
+        Html.section [
+            prop.id "lists"
+            prop.className "lists"
+            prop.children (
+                match model.lastArrivals with
+                | Some arr -> renderArrivals model dispatch arr
+                | None -> []
+            )
+        ]
+        Html.section [
+            prop.id "map"
+            prop.className "map-section"
+            prop.ariaLabel "Live train map"
+            prop.children [
+                if Option.isSome model.lastArrivals then
+                    renderMap model dispatch
+            ]
+        ]
+    ]
 
-// Elmish View function
-let view (model: Model) (_dispatch: Dispatch<Msg>) =
-    renderStopSelect model
-    match model.status with
-    | Loading -> setStatusText "Loading…" false
-    | ErrorMessage msg -> setStatusText msg true
-    | FeedAge tsOpt ->
-        let age =
-            match tsOpt with
-            | Some ms when ms <> 0.0 -> formatAge (createDateMs ms)
-            | _ -> "unknown"
-        setStatusText $"Feed age: {age}" false
-
-    Option.iter (renderArrivals model) model.lastArrivals
-    if Option.isSome model.lastArrivals then
-        renderMap model
-
-let private setSpotlight (tripIdOpt: string option) =
-    if spotlightTripId.Value <> tripIdOpt then
-        spotlightTripId.Value <- tripIdOpt
-        syncSpotlightDom tripIdOpt
-
-let private toggleSpotlight (ev: obj) =
-    match closestAttr ev "data-trip-id" with
-    | Some tid when spotlightTripId.Value = Some tid -> setSpotlight None
-    | Some tid -> setSpotlight (Some tid)
-    | None -> ()
-
-let private bindSpotlight (el: IDomElement) =
-    el.addEventListener("mouseover", fun ev -> closestAttr ev "data-trip-id" |> setSpotlight)
-    el.addEventListener("mouseout", fun _ -> setSpotlight None)
-
-let bindStopSelect (dispatch: Dispatch<Msg>) =
-    stopSelect.addEventListener("change", fun _ ->
-        dispatch (SelectStop stopSelect.value))
-    bindSpotlight listsEl
-    listsEl.addEventListener("click", toggleSpotlight)
-    mapElOpt |> Option.iter (fun mapEl ->
-        bindSpotlight mapEl
-        mapEl.addEventListener("click", fun ev ->
-            match closestAttr ev "data-stop-id" with
-            | Some stopId -> dispatch (SelectStop stopId)
-            | None -> toggleSpotlight ev))
+let withReactRoot (program: Program<'arg, Model, Msg, ReactElement>) : Program<'arg, Model, Msg, ReactElement> =
+    let mutable root : IReactRoot option = None
+    program
+    |> Program.withSetState (fun model dispatch ->
+        let r =
+            match root with
+            | Some existing -> existing
+            | None ->
+                let created = ReactDOM.createRoot (document.querySelector ".app" :?> HTMLElement)
+                root <- Some created
+                created
+        flushSync (fun () -> r.render (view model dispatch)))

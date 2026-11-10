@@ -4,6 +4,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { Window } from "happy-dom";
 import gtfs from "gtfs-realtime-bindings";
 import { parseStops } from "../src/ParseStops.fs.js";
 
@@ -19,61 +20,6 @@ const stopsCsv =
 
 const fixedNowMs = Date.parse("2024-01-01T12:00:00Z");
 const fixedNowSeconds = Math.floor(fixedNowMs / 1000);
-
-class StubElement {
-  constructor(tag) {
-    this.tag = tag;
-    this.className = "";
-    this.textContent = "";
-    this.innerHTML = "";
-    this.value = "";
-    this.handlers = new Map();
-  }
-
-  addEventListener(type, handler) {
-    this.handlers.set(type, handler);
-  }
-
-  click() {
-    this.handlers.get("click")?.();
-  }
-}
-
-class StubDocument {
-  constructor() {
-    this.nodes = {
-      "#status": new StubElement("div"),
-      "#lists": new StubElement("div"),
-      "#map": new StubElement("div"),
-      "#stop-select": new StubElement("select"),
-      "#stop-name": new StubElement("span")
-    };
-  }
-
-  querySelector(selector) {
-    return this.nodes[selector] ?? null;
-  }
-
-  querySelectorAll(_selector) {
-    return [];
-  }
-
-  createElement(tag) {
-    const el = new StubElement(tag);
-    if (tag === "link") {
-      el.relList = {
-        supports: (value) => value === "modulepreload"
-      };
-    }
-    return el;
-  }
-
-  get(selector) {
-    const el = this.querySelector(selector);
-    if (!el) throw new Error(`Missing element ${selector}`);
-    return el;
-  }
-}
 
 function extractInlineModule(html) {
   const match = html.match(/<script[^>]*type="module"[^>]*>([\s\S]*?)<\/script>/);
@@ -124,7 +70,16 @@ function buildFeedBuffer(nowSeconds) {
 }
 
 function createSandbox(feedBuffer, initialHash = "", geolocation) {
-  const document = new StubDocument();
+  const win = new Window({
+    url: `https://example.com/${initialHash}`
+  });
+  const document = win.document;
+  document.body.innerHTML = '<main class="app"></main>';
+  document.get = (selector) => {
+    const el = document.querySelector(selector);
+    if (!el) throw new Error(`Missing element ${selector}`);
+    return el;
+  };
   const intervals = new Map();
   let feedFetchCount = 0;
   let timeouts = 0;
@@ -181,6 +136,11 @@ function createSandbox(feedBuffer, initialHash = "", geolocation) {
   };
 
   const context = {};
+  for (const key of Object.getOwnPropertyNames(win)) {
+    try {
+      context[key] = win[key];
+    } catch {}
+  }
 
   Object.assign(context, {
     console,
@@ -192,8 +152,6 @@ function createSandbox(feedBuffer, initialHash = "", geolocation) {
     history,
     navigator: { userAgent: "node", geolocation },
     setTimeout,
-    setInterval,
-    clearInterval,
     clearTimeout,
     setInterval: (fn, ms = baseInterval) => {
       const id = intervals.size + 1;
@@ -432,7 +390,7 @@ test("manual station selection takes priority over a pending location request", 
   await waitForRender(document);
   const select = document.get("#stop-select");
   select.value = "G26";
-  select.handlers.get("change")();
+  select.dispatchEvent(new context.Event("change", { bubbles: true }));
   await waitForFetchCount(feedFetchCount, 2);
   locate({ coords: { latitude: 40.746554, longitude: -73.943832 } });
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -560,7 +518,7 @@ test("renders OpenStreetMap slippy map with G-line polyline and interpolated liv
   );
   assert.match(
     mapEl.innerHTML,
-    /class="osm-stop[^"]*"[^>]*style="left:\d+\.\d+%;top:\d+\.\d+%"/,
+    /class="osm-stop[^"]*"[^>]*style="left:\s*\d+\.\d+%;\s*top:\s*\d+\.\d+%;?"/,
     "positions station markers using viewport percentages matching SVG viewBox"
   );
   assert.ok(
@@ -602,15 +560,7 @@ test("renders OpenStreetMap slippy map with G-line polyline and interpolated liv
   );
 
   // Click a station dot on the map
-  const clickHandler = mapEl.handlers.get("click");
-  clickHandler({
-    target: {
-      closest(sel) {
-        if (sel === "[data-stop-id]") return { getAttribute: () => "G29" };
-        return null;
-      }
-    }
-  });
+  mapEl.querySelector('[data-stop-id="G29"]').click();
   await waitForFetchCount(feedFetchCount, 2);
   assert.equal(document.get("#stop-select").value, "G29", "clicking a station marker selects that station");
 });
