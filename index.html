@@ -1,29 +1,13 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Greenpoint Av Subway Arrivals</title>
-    <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <main class="app">
-      <header>
-        <div>
-          <p class="eyebrow">🚇 <span id="stop-name"></span></p>
-          <h1>Live G train arrivals</h1>
-          <p class="sub">Your nearest G train station, or choose a station below</p>
-        </div>
-        <div class="controls">
-          <label class="field">
-            <span class="label">Station</span>
-            <select id="stop-select" name="stop-select"></select>
-          </label>
-        </div>
-      </header>
-      <section id="status" class="status">Loading…</section>
-      <section id="lists" class="lists"></section>
-      <section id="map" class="map-section" aria-label="Live train map"></section>
+      <p id="status" class="notification is-info is-light status" role="status">Loading…</p>
     </main>
     <script type="module" src="/src/Main.fs.js"></script>
   </body>

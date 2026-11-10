@@ -12,6 +12,7 @@
     "test:e2e": "npm run build -- --emptyOutDir=false && node --test tests/e2e.test.mjs"
   },
   "dependencies": {
+    "bulma": "1.0.4",
     "gtfs-realtime-bindings": "^2.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

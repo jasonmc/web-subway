@@ -11,7 +11,7 @@
       let
         pkgs = import nixpkgs { inherit system; };
         src = pkgs.lib.cleanSource ./.;
-        npmDepsHash = "sha256-tk/GDy/5hx/QQE0X/0ES1dlKhl2X1rvhxDl3RYymz40=";
+        npmDepsHash = "sha256-mV5sybIl4K+jomLIkl8u+u/elVbX0JltSglhjnhPq4M=";
         npmInstallFlags = [ "--legacy-peer-deps" ];
         dotnet-sdk = pkgs.dotnetCorePackages.sdk_10_0;
         nugetDeps = map pkgs.dotnetCorePackages.fetchNupkg [
@@ -69,6 +69,11 @@
             pname = "Feliz";
             version = "3.3.3";
             hash = "sha256-LJNBOBzD3IxPu8WglzWlrVAEP6dJ6Fwrayn26wzfQQc=";
+          }
+          {
+            pname = "Feliz.Bulma";
+            version = "5.0.0";
+            hash = "sha256-B/lUpzaYCsULYHmxcx9smerq+plS6Sv047B1efDfq7s=";
           }
           {
             pname = "Feliz.CompilerPlugins";

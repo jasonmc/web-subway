@@ -1,6 +1,6 @@
 # G train arrivals
 
-A Vite + F# (Fable) page that reads the MTA GTFS-RT G train feed and shows the next arrivals grouped by direction. It selects the nearest G train station using device location, with a station dropdown for manual selection.
+A Vite + F# (Fable/Feliz) page that reads the MTA GTFS-RT G train feed and shows the next arrivals grouped by direction. It selects the nearest G train station using device location, with a station dropdown for manual selection.
 
 ## Setup
 
@@ -26,6 +26,10 @@ Open the printed local URL. On a fresh visit, allow device location to automatic
 Station IDs, names, and coordinates are bundled together in `all_stops.csv` (`stop_id`, `stop_name`, `stop_lat`, `stop_lon`). Coordinates come from the [MTA Subway Stations dataset](https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f) (retrieved October 23, 2026). Stops with missing coordinates still have names available but are skipped for nearest-station selection. Nearest-station selection runs on the device using straight-line distance among the stations supported by this G train feed; location is not sent to the app's server or MTA.
 
 The stops CSV is embedded directly in the single HTML build. Enable HTTP compression on your web server to reduce transfer size; the browser handles decompression automatically.
+
+## Styling
+
+Standard UI components use Feliz.Bulma 5 and bundled Bulma 1 CSS. Use the Feliz.Bulma API in `src/Ui.fs` for cards, form fields, notifications, and columns. `src/style.css` retains the compact feed-age indicator and wider map column, alongside the custom arrival rows and map/animation styles. Other UI styling follows Bulma defaults. Bulma is imported before those styles in `src/Main.fs`; the page explicitly uses its light theme. All CSS remains embedded in the single-file build.
 
 ## Tests
 

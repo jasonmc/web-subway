@@ -1,19 +1,12 @@
+/* Bulma styles the UI; custom styles cover the status indicator and live map. */
 :root {
-  color-scheme: light;
-  font-family: "Soehne", "Helvetica Neue", Arial, sans-serif;
+  --bulma-family-primary: "Soehne", "Helvetica Neue", Arial, sans-serif;
   background: radial-gradient(circle at 30% 20%, #f5f7ff, #f7fafc 30%), #f7fafc;
-  color: #0f172a;
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
 }
 
 body {
-  margin: 0;
   min-height: 100vh;
+  background: transparent;
 }
 
 .app {
@@ -22,34 +15,7 @@ body {
   padding: 40px 20px 80px;
 }
 
-@media (min-width: 720px) {
-  .app {
-    display: grid;
-    grid-template-columns: minmax(290px, 1fr) minmax(360px, 430px);
-    column-gap: 16px;
-    align-items: start;
-  }
-
-  .app > header,
-  .app > .status {
-    grid-column: 1 / -1;
-  }
-
-  .app > .status {
-    justify-self: start;
-    margin-bottom: 16px;
-  }
-
-  .app > .lists {
-    grid-template-columns: 1fr;
-  }
-
-  .app > .map-section {
-    margin-top: 0;
-  }
-}
-
-header {
+.app-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -57,41 +23,12 @@ header {
   flex-wrap: wrap;
 }
 
-.controls {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.station-field select {
   min-width: 220px;
-}
-
-.label {
-  font-weight: 600;
-  color: #0f172a;
-}
-
-select {
-  border-radius: 10px;
-  border: 1px solid #cbd5e1;
-  padding: 10px 12px;
-  font-size: 1rem;
-  background: white;
-  min-width: 220px;
-}
-
-h1 {
-  font-size: 2.2rem;
-  margin: 4px 0;
+  max-width: 100%;
 }
 
 .eyebrow {
-  margin: 0;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.85rem;
@@ -100,58 +37,48 @@ h1 {
 }
 
 .sub {
-  margin: 0;
   color: #475569;
 }
 
-button {
-  border: 1px solid #cbd5e1;
-  background: #0f172a;
-  color: #f8fafc;
-  border-radius: 999px;
-  padding: 10px 16px;
-  font-size: 0.95rem;
-  cursor: pointer;
-  transition: transform 150ms ease, box-shadow 150ms ease;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.1);
-}
-
-button:hover {
-  transform: translateY(-1px);
-}
-
-.status {
-  margin: 24px 0 8px;
+.app .status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 24px 0 16px;
+  line-height: normal;
   padding: 12px 14px;
   border-radius: 12px;
   background: #eef2ff;
   color: #312e81;
   font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
 }
 
-.lists {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+.app .status.error {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+/* Keep Bulma’s columns, with enough room for the map at tablet sizes and up. */
+.app-content {
+  --bulma-column-gap: 0;
   gap: 16px;
 }
 
-.card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.08);
+.app-content > .column {
+  min-width: 0;
 }
 
-.card h2 {
-  margin: 0 0 10px;
-  font-size: 1.1rem;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+@media (min-width: 769px) {
+  .app-content > .map-column {
+    flex: none;
+    width: 430px;
+  }
+}
+
+@media (max-width: 768px) {
+  .map-section {
+    margin-top: 16px;
+  }
 }
 
 .arrival {
@@ -178,6 +105,9 @@ button:hover {
 }
 
 .arrival-main {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -219,15 +149,6 @@ button:hover {
 .meta {
   font-size: 0.9rem;
   color: #475569;
-}
-
-.error {
-  background: #fef2f2;
-  color: #991b1b;
-}
-
-.map-section {
-  margin-top: 16px;
 }
 
 .map-section:empty {

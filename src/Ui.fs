@@ -4,6 +4,7 @@ open System
 open Browser
 open Browser.Types
 open Feliz
+open Feliz.Bulma
 open Elmish
 open Config
 open State
@@ -19,7 +20,7 @@ let setError (message: string) : unit =
     | null -> ()
     | el ->
         el.textContent <- message
-        el.className <- "status error"
+        el.className <- "notification is-danger is-light status error"
 
 [<Fable.Core.Import("flushSync", "react-dom")>]
 let private flushSync (fn: unit -> unit) : unit = Fable.Core.Util.jsNative
@@ -102,20 +103,26 @@ let private renderArrivals (model: Model) (dispatch: Dispatch<Msg>) (arrivals: A
                             ]
                         ])
                 Some (
-                    Html.article [
+                    Bulma.card [
                         prop.key title
-                        prop.className "card"
                         prop.children [
-                            Html.h2 $"{icon} {title}"
-                            yield! rows
+                            Bulma.cardContent [
+                                prop.children [
+                                    Bulma.title.h2 [
+                                        Feliz.Bulma.title.is5
+                                        prop.className "mb-3"
+                                        prop.text $"{icon} {title}"
+                                    ]
+                                    yield! rows
+                                ]
+                            ]
                         ]
                     ]
                 ))
 
     if List.isEmpty renderedCards then
-        [ Html.article [
-              prop.className "card"
-              prop.children [
+        [ Bulma.card [
+              Bulma.cardContent [
                   Html.p [ prop.className "meta"; prop.text "No arrivals in the feed." ]
               ]
           ] ]
@@ -252,8 +259,8 @@ let private renderTrains (model: Model) (dispatch: Dispatch<Msg>) : ReactElement
     |> Array.toList
 
 let private renderMap (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
-    Html.article [
-        prop.className "card map-card"
+    Bulma.card [
+        prop.className "map-card"
         prop.children [
             Html.div [
                 prop.className "osm-viewport"
@@ -320,31 +327,38 @@ let view (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
 
     React.Fragment [
         Html.header [
-            Html.div [
-                Html.p [
-                    prop.className "eyebrow"
-                    prop.children [
-                        Html.text "🚇 "
-                        Html.span [
-                            prop.id "stop-name"
-                            prop.text (stopLabel model.stopLookup model.selectedStopPrefix)
+            prop.className "app-header"
+            prop.children [
+                Html.div [
+                    Html.p [
+                        prop.className "eyebrow"
+                        prop.children [
+                            Html.text "🚇 "
+                            Html.span [
+                                prop.id "stop-name"
+                                prop.text (stopLabel model.stopLookup model.selectedStopPrefix)
+                            ]
                         ]
                     ]
+                    Bulma.title.h1 [
+                        title.is3
+                        prop.className "mt-1 mb-2"
+                        prop.text "Live G train arrivals"
+                    ]
+                    Html.p [
+                        prop.className "sub"
+                        prop.text "Your nearest G train station, or choose a station below"
+                    ]
                 ]
-                Html.h1 "Live G train arrivals"
-                Html.p [
-                    prop.className "sub"
-                    prop.text "Your nearest G train station, or choose a station below"
-                ]
-            ]
-            Html.div [
-                prop.className "controls"
-                prop.children [
-                    Html.label [
-                        prop.className "field"
-                        prop.children [
-                            Html.span [ prop.className "label"; prop.text "Station" ]
-                            Html.select [
+                Bulma.field.div [
+                    prop.className "station-field mb-0"
+                    prop.children [
+                        Bulma.label [
+                            prop.htmlFor "stop-select"
+                            prop.text "Station"
+                        ]
+                        Bulma.control.div [
+                            Bulma.select [
                                 prop.id "stop-select"
                                 prop.name "stop-select"
                                 prop.value model.selectedStopPrefix
@@ -364,27 +378,45 @@ let view (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
                 ]
             ]
         ]
-        Html.section [
+        Bulma.notification [
             prop.id "status"
+            prop.role "status"
+            color.isLight
+            if isError then color.isDanger else color.isInfo
             prop.className (if isError then "status error" else "status")
             prop.text statusText
         ]
-        Html.section [
-            prop.id "lists"
-            prop.className "lists"
-            prop.children (
-                match model.lastArrivals with
-                | Some arr -> renderArrivals model dispatch arr
-                | None -> []
-            )
-        ]
-        Html.section [
-            prop.id "map"
-            prop.className "map-section"
-            prop.ariaLabel "Live train map"
+        Bulma.columns [
+            prop.className "app-content"
             prop.children [
-                if Option.isSome model.lastArrivals then
-                    renderMap model dispatch
+                Bulma.column [
+                    prop.className "arrivals-column"
+                    prop.children [
+                        Html.section [
+                            prop.id "lists"
+                            prop.className "lists"
+                            prop.children (
+                                match model.lastArrivals with
+                                | Some arr -> renderArrivals model dispatch arr
+                                | None -> []
+                            )
+                        ]
+                    ]
+                ]
+                Bulma.column [
+                    prop.className "map-column"
+                    prop.children [
+                        Html.section [
+                            prop.id "map"
+                            prop.className "map-section"
+                            prop.ariaLabel "Live train map"
+                            prop.children [
+                                if Option.isSome model.lastArrivals then
+                                    renderMap model dispatch
+                            ]
+                        ]
+                    ]
+                ]
             ]
         ]
     ]

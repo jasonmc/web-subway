@@ -12,6 +12,7 @@ open Feed
 open Timers
 open Ui
 
+importSideEffects "bulma/css/bulma.css"
 importSideEffects "./style.css"
 
 type IResponse =
