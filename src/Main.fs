@@ -2,6 +2,7 @@ module Main
 
 open Fable.Core
 open Fable.Core.JsInterop
+open Elmish
 open Config
 open State
 open Stops
@@ -80,9 +81,9 @@ let init () : Model * Cmd<Msg> =
     }
     let geoCmd =
         if hasUrlStop then Cmd.none
-        else Cmd.ofPromise (nearestStopFromDevice stopLookup) GeoResolved (fun _ -> GeoResolved None)
+        else Cmd.OfPromise.either (nearestStopFromDevice stopLookup) () GeoResolved (fun _ -> GeoResolved None)
 
-    model, Cmd.batch [ geoCmd; Cmd.ofMsg (RefreshFeed true); startTimersSub ]
+    model, Cmd.batch [ Cmd.ofEffect bindStopSelect; geoCmd; Cmd.ofMsg (RefreshFeed true); startTimersSub ]
 
 // Elmish Update
 let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
@@ -107,8 +108,9 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
     | RefreshFeed showLoading ->
         let nextStatus = if showLoading then Loading else model.status
         { model with fetching = true; status = nextStatus },
-        Cmd.ofPromise
+        Cmd.OfPromise.either
             (fetchAndParse model.selectedStopPrefix)
+            ()
             (Ok >> FeedLoaded)
             (fun err ->
                 JS.console.error err
@@ -147,22 +149,9 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
         let nextMapTrains, nextSpinePositions = recomputeTrains model.lastFeedTimestampMs model.stopLookup model.spinePosByTrip model.rawTrips
         { model with status = nextStatus; mapTrains = nextMapTrains; spinePosByTrip = nextSpinePositions }, Cmd.none
 
-// Elmish Program runner
-let runProgram () =
-    try
-        let mutable currentModel, initialCmd = init ()
-        view currentModel
-        let rec dispatch (msg: Msg) =
-            let nextModel, cmd = update msg currentModel
-            currentModel <- nextModel
-            view currentModel
-            for effect in cmd do
-                effect dispatch
-        bindStopSelect dispatch
-        for effect in initialCmd do
-            effect dispatch
-    with err ->
-        JS.console.error err
-        setError "Failed to load stops list."
-
-runProgram ()
+try
+    Program.mkProgram init update view
+    |> Program.run
+with err ->
+    JS.console.error err
+    setError "Failed to load stops list."

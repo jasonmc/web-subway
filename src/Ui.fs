@@ -2,6 +2,7 @@ module Ui
 
 open System
 open Fable.Core
+open Elmish
 open Config
 open State
 open Stops
@@ -254,7 +255,7 @@ let private renderStopSelect (model: Model) =
         lastSyncedStop.Value <- model.selectedStopPrefix
 
 // Elmish View function
-let view (model: Model) =
+let view (model: Model) (_dispatch: Dispatch<Msg>) =
     renderStopSelect model
     match model.status with
     | Loading -> setStatusText "Loading…" false

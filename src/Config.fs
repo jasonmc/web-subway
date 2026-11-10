@@ -14,12 +14,6 @@ module Prelude =
     [<Emit("$0.then($1)")>]
     let promiseBind (p: JS.Promise<'A>) (f: 'A -> JS.Promise<'B>) : JS.Promise<'B> = jsNative
 
-    [<Emit("$0.then($1)")>]
-    let promiseMap (p: JS.Promise<'A>) (f: 'A -> 'B) : JS.Promise<'B> = jsNative
-
-    [<Emit("$0.catch($1)")>]
-    let promiseCatch (p: JS.Promise<'A>) (f: obj -> 'A) : JS.Promise<'A> = jsNative
-
     type PromiseBuilder() =
         member _.Return(x: 'T) : JS.Promise<'T> = promiseResolve x
         member _.ReturnFrom(p: JS.Promise<'T>) : JS.Promise<'T> = p
@@ -30,22 +24,6 @@ module Prelude =
         member _.Run(p: JS.Promise<'T>) : JS.Promise<'T> = p
 
     let promise = PromiseBuilder()
-
-    // Lightweight Elmish Cmd<'Msg>
-    type Dispatch<'Msg> = 'Msg -> unit
-    type Cmd<'Msg> = (Dispatch<'Msg> -> unit) list
-
-    module Cmd =
-        let none: Cmd<'Msg> = []
-        let ofMsg (msg: 'Msg) : Cmd<'Msg> = [ fun dispatch -> dispatch msg ]
-        let ofEffect (effect: Dispatch<'Msg> -> unit) : Cmd<'Msg> = [ effect ]
-        let batch (cmds: Cmd<'Msg> list) : Cmd<'Msg> = List.concat cmds
-        let ofPromise (task: unit -> JS.Promise<'T>) (ofSuccess: 'T -> 'Msg) (ofError: obj -> 'Msg) : Cmd<'Msg> =
-            [ fun dispatch ->
-                task ()
-                |> fun p -> promiseMap p (ofSuccess >> dispatch)
-                |> fun p -> promiseCatch p (ofError >> dispatch)
-                |> ignore ]
 
 let DEFAULT_FEED_URL = "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-g"
 let DEFAULT_STOP_ID_PREFIX = "G26"

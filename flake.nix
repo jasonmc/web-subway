@@ -21,6 +21,11 @@
             hash = "sha256-DOUQUo3mQz9GOykafP1NcjjsriFDcYiCSx1LEhR0piU=";
           }
           {
+            pname = "Fable.Elmish";
+            version = "5.0.2";
+            hash = "sha256-R6r6AhDnYpS2+u5a4pN+S0+Q0JxtvtjsFUfGt9OG4ok=";
+          }
+          {
             pname = "FSharp.Core";
             version = "10.1.401";
             hash = "sha256-zx9OafwtE1Gvn6mSOskO1GYIhzCgCGfL4OsbOyxolj4=";
