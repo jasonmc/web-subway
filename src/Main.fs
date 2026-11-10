@@ -28,11 +28,11 @@ let private fetchCors (url: string) : JS.Promise<IResponse> = jsNative
 [<Emit("($0 instanceof Error ? $0.message : 'Failed to load arrivals.')")>]
 let private errorMessage (err: obj) : string = jsNative
 
-let private fetchAndParse (stopIdPrefix: string) () : JS.Promise<Set<string> * ArrivalGroup * FeedMeta * RawTrainTrip array> = promise {
-    let! res = fetchCors (envFeedUrl |? DEFAULT_FEED_URL)
+let private fetchAndParse (stopIdPrefix: string) () : Async<Set<string> * ArrivalGroup * FeedMeta * RawTrainTrip array> = async {
+    let! res = Async.AwaitPromise(fetchCors (envFeedUrl |? DEFAULT_FEED_URL))
     if not res.ok then
-        failwith $"Request failed: {res.status} {res.statusText}"
-    let! buf = res.arrayBuffer()
+        return failwith $"Request failed: {res.status} {res.statusText}"
+    let! buf = Async.AwaitPromise(res.arrayBuffer())
     let feed = decodeFeed buf
     let available = stopsInFeed feed
     let arrivals, meta = parseFeed feed stopIdPrefix
@@ -81,7 +81,7 @@ let init () : Model * Cmd<Msg> =
     }
     let geoCmd =
         if hasUrlStop then Cmd.none
-        else Cmd.OfPromise.either (nearestStopFromDevice stopLookup) () GeoResolved (fun _ -> GeoResolved None)
+        else Cmd.OfAsync.either (nearestStopFromDevice stopLookup) () GeoResolved (fun _ -> GeoResolved None)
 
     model, Cmd.batch [ Cmd.ofEffect bindStopSelect; geoCmd; Cmd.ofMsg (RefreshFeed true); startTimersSub ]
 
@@ -108,7 +108,7 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
     | RefreshFeed showLoading ->
         let nextStatus = if showLoading then Loading else model.status
         { model with fetching = true; status = nextStatus },
-        Cmd.OfPromise.either
+        Cmd.OfAsync.either
             (fetchAndParse model.selectedStopPrefix)
             ()
             (Ok >> FeedLoaded)

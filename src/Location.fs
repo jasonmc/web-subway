@@ -39,11 +39,8 @@ let private hasGeolocation () : bool = jsNative
 [<Emit("navigator.geolocation.getCurrentPosition($0, $1, { timeout: 8000, maximumAge: 60000 })")>]
 let private getCurrentPosition (onSuccess: IGeoPosition -> unit) (onError: obj -> unit) : unit = jsNative
 
-[<Emit("new Promise($0)")>]
-let private makePromise (executor: ('T -> unit) -> unit) : JS.Promise<'T> = jsNative
-
-let nearestStopFromDevice (stopLookup: Map<string, StopOption>) () : JS.Promise<(string * (float * float)) option> =
-    makePromise (fun resolve ->
+let nearestStopFromDevice (stopLookup: Map<string, StopOption>) () : Async<(string * (float * float)) option> =
+    Async.FromContinuations(fun (resolve, _, _) ->
         if not (hasGeolocation ()) then
             resolve None
         else
