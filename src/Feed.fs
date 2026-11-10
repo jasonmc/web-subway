@@ -35,47 +35,49 @@ let projectToMapPercent (lat: float) (lon: float) : string * string =
 [<ImportDefault("../g_corridor.svg?raw")>]
 let STATIC_BASE_SVG: string = jsNative
 
-// Parse (px, py, cumArcLen) vertices from <path class="osm-track-line" d="..."/> in g_corridor.svg
-let private trackPolyline : (float * float * float) array =
+let private clamp (lo: float) (hi: float) (v: float) =
+    max lo (min hi v)
+
+// Parse consecutive ((x0, y0, s0), (x1, y1, s1)) segments from <path class="osm-track-line" d="..."/> in g_corridor.svg
+let private trackSegments : ((float * float * float) * (float * float * float)) array =
     let m = Text.RegularExpressions.Regex.Match(STATIC_BASE_SVG, "osm-track-line\" d=\"([^\"]+)\"")
     if not m.Success then [||]
     else
-        let nums =
+        let pts =
             Text.RegularExpressions.Regex.Matches(m.Groups[1].Value, "-?\\d+(?:\\.\\d+)?")
             |> Seq.cast<Text.RegularExpressions.Match>
             |> Seq.map (fun x -> float x.Value)
+            |> Seq.chunkBySize 2
+            |> Seq.choose (function [| x; y |] -> Some (x, y) | _ -> None)
             |> Seq.toArray
-        let mutable s = 0.0
-        [| for i in 0 .. 2 .. nums.Length - 2 do
-               let x, y = nums[i], nums[i + 1]
-               if i > 0 then
-                   let dx, dy = x - nums[i - 2], y - nums[i - 1]
-                   s <- s + Math.Sqrt(dx * dx + dy * dy)
-               x, y, s |]
+        if pts.Length < 2 then [||]
+        else
+            let x0, y0 = pts[0]
+            pts[1..]
+            |> Array.scan (fun (px, py, s) (x, y) ->
+                let dx, dy = x - px, y - py
+                x, y, s + Math.Sqrt(dx * dx + dy * dy)) (x0, y0, 0.0)
+            |> Array.pairwise
 
 let private projectOntoTrack (px: float, py: float) : float =
-    let mutable bestD2 = Double.PositiveInfinity
-    let mutable bestS = 0.0
-    for i in 0 .. trackPolyline.Length - 2 do
-        let x0, y0, s0 = trackPolyline[i]
-        let x1, y1, s1 = trackPolyline[i + 1]
-        let vx, vy = x1 - x0, y1 - y0
-        let l2 = vx * vx + vy * vy
-        let t = if l2 > 0.0 then max 0.0 (min 1.0 (((px - x0) * vx + (py - y0) * vy) / l2)) else 0.0
-        let dx, dy = px - (x0 + t * vx), py - (y0 + t * vy)
-        let d2 = dx * dx + dy * dy
-        if d2 < bestD2 then
-            bestD2 <- d2
-            bestS <- s0 + t * (s1 - s0)
-    bestS
+    if Array.isEmpty trackSegments then 0.0
+    else
+        trackSegments
+        |> Array.map (fun ((x0, y0, s0), (x1, y1, s1)) ->
+            let vx, vy = x1 - x0, y1 - y0
+            let l2 = vx * vx + vy * vy
+            let t = if l2 > 0.0 then clamp 0.0 1.0 (((px - x0) * vx + (py - y0) * vy) / l2) else 0.0
+            let dx, dy = px - (x0 + t * vx), py - (y0 + t * vy)
+            dx * dx + dy * dy, s0 + t * (s1 - s0))
+        |> Array.minBy fst
+        |> snd
 
 let private pointAtArc (s: float) : float * float =
-    let mutable i = 0
-    while i < trackPolyline.Length - 2 && (let _, _, s1 = trackPolyline[i + 1] in s1 < s) do
-        i <- i + 1
-    let x0, y0, s0 = trackPolyline[i]
-    let x1, y1, s1 = trackPolyline[i + 1]
-    let t = if s1 > s0 then max 0.0 (min 1.0 ((s - s0) / (s1 - s0))) else 0.0
+    let (x0, y0, s0), (x1, y1, s1) =
+        trackSegments
+        |> Array.tryFind (fun (_, (_, _, s1)) -> s1 >= s)
+        |? Array.last trackSegments
+    let t = if s1 > s0 then clamp 0.0 1.0 ((s - s0) / (s1 - s0)) else 0.0
     x0 + t * (x1 - x0), y0 + t * (y1 - y0)
 
 // Typed interfaces for gtfs-realtime-bindings (Option A)
@@ -147,9 +149,6 @@ let private spineIndexByStop =
 let stopSpineIndex (stopId: string) : int option =
     Map.tryFind stopId spineIndexByStop
 
-let private clamp (lo: float) (hi: float) (v: float) =
-    max lo (min hi v)
-
 // Blend linear progress with smoothstep so trains accelerate out of stations and brake into platforms
 let private smoothProgress (rawP: float) : float =
     let t = clamp 0.0 1.0 rawP
@@ -206,35 +205,37 @@ let extractRawTrips (feed: IFeedMessage) : RawTrainTrip array =
                    | None -> None, None, None
 
                let dirFromId (s: string) =
-                   if s.EndsWith("N") then Northbound
-                   elif s.EndsWith("S") then Southbound
-                   else Other
+                   if s.EndsWith("N") then Some Northbound
+                   elif s.EndsWith("S") then Some Southbound
+                   else None
 
-               let mutable suffixDir =
-                   if tripId.Contains("..N") then Northbound
-                   elif tripId.Contains("..S") then Southbound
-                   else rawVehStopOpt |> Option.map dirFromId |? Other
-
-               let stuCalls =
+               let spineStus =
                    [| for stu in (tu.stopTimeUpdate |? [||]) do
                           match stu.stopId with
                           | Some rawId when rawId <> "" ->
                               let cleanId = STOP_SUFFIX_RE.Replace(rawId, "")
                               if Set.contains cleanId spineStopSet then
-                                  let d = dirFromId rawId
-                                  if d <> Other then suffixDir <- d
-                                  let arrOpt = match stu.arrival with EventTime t -> Some t | _ -> None
-                                  let depOpt = match stu.departure with EventTime t -> Some t | _ -> None
-                                  match arrOpt <|> depOpt with
-                                  | Some primarySec when primarySec >= nowSec - 300.0 ->
-                                      let arrSec = arrOpt |? primarySec
-                                      let depSec = depOpt |? arrSec
-                                      { stopId = cleanId; arriveSec = arrSec; departSec = max arrSec depSec }
-                                  | _ -> ()
+                                  rawId, cleanId, stu
+                          | _ -> () |]
+
+               let stuCalls =
+                   [| for _, cleanId, stu in spineStus do
+                          let arrOpt = match stu.arrival with EventTime t -> Some t | _ -> None
+                          let depOpt = match stu.departure with EventTime t -> Some t | _ -> None
+                          match arrOpt <|> depOpt with
+                          | Some primarySec when primarySec >= nowSec - 300.0 ->
+                              let arrSec = arrOpt |? primarySec
+                              let depSec = depOpt |? arrSec
+                              { stopId = cleanId; arriveSec = arrSec; departSec = max arrSec depSec }
                           | _ -> () |]
                    |> Array.sortBy _.arriveSec
 
-               let dir = if suffixDir <> Other then suffixDir else baseDir
+               let dir =
+                   (spineStus |> Array.choose (fun (rawId, _, _) -> dirFromId rawId) |> Array.tryLast)
+                   <|> (if tripId.Contains("..N") then Some Northbound
+                        elif tripId.Contains("..S") then Some Southbound
+                        else rawVehStopOpt |> Option.bind dirFromId)
+                   |? baseDir
 
                // Prepend upstream VehiclePosition stop when MTA has already dropped it from stopTimeUpdate
                let calls =
@@ -295,91 +296,86 @@ let estimateTrainPositions
     (trips: RawTrainTrip array)
     : EstimatedTrain array * Map<string, float * float> =
 
-    let results = ResizeArray<EstimatedTrain>()
-    let mutable nextPositions = Map.empty<string, float * float>
+    let stepped =
+        trips
+        |> Array.choose (fun trip ->
+            let distinctCalls =
+                trip.calls
+                |> Array.fold (fun (acc: TrainStopCall list) c ->
+                    match acc with
+                    | prev :: _ when prev.stopId = c.stopId -> acc
+                    | _ -> c :: acc) []
+                |> List.rev
+                |> List.toArray
 
-    for trip in trips do
-        let distinctCalls =
-            trip.calls
-            |> Array.fold (fun (acc: TrainStopCall list) c ->
-                match acc with
-                | prev :: _ when prev.stopId = c.stopId -> acc
-                | _ -> c :: acc) []
-            |> List.rev
-            |> List.toArray
+            // Account for ~15s station dwell time when MTA reports identical arrival & departure timestamps
+            let effectiveDepart (idx: int) (c: TrainStopCall) =
+                if c.departSec > c.arriveSec + 1.0 then c.departSec
+                elif idx + 1 < distinctCalls.Length then
+                    c.departSec + clamp 0.0 15.0 ((distinctCalls[idx + 1].arriveSec - c.departSec - 30.0) * 0.25)
+                else c.departSec + 10.0
 
-        // Account for ~15s station dwell time when MTA reports identical arrival & departure timestamps
-        let effectiveDepart (idx: int) (c: TrainStopCall) =
-            if c.departSec > c.arriveSec + 1.0 then c.departSec
-            elif idx + 1 < distinctCalls.Length then
-                c.departSec + clamp 0.0 15.0 ((distinctCalls[idx + 1].arriveSec - c.departSec - 30.0) * 0.25)
-            else c.departSec + 10.0
+            distinctCalls
+            |> Array.tryFindIndex (fun c -> c.departSec >= nowSec - 5.0)
+            |> Option.bind (fun nextIdx ->
+                let nextCall = distinctCalls[nextIdx]
+                let nextSpineIdx = spineIndexByStop |> Map.tryFind nextCall.stopId |? 0
+                let remSec = nextCall.arriveSec - nowSec
 
-        match distinctCalls |> Array.tryFindIndex (fun c -> c.departSec >= nowSec - 5.0) with
-        | None -> ()
-        | Some nextIdx ->
-            let nextCall = distinctCalls[nextIdx]
-            let nextSpineIdx = spineIndexByStop |> Map.tryFind nextCall.stopId |? 0
-            let remSec = nextCall.arriveSec - nowSec
-
-            // PREFERRED_STOP_ORDER runs South (F27 = 0) to North (G22 = 20)
-            let targetSpinePosOpt =
-                if remSec <= 8.0 then
-                    Some (float nextSpineIdx)
-                elif nextIdx > 0 then
-                    let prevCall = distinctCalls[nextIdx - 1]
-                    let prevSpineIdx = spineIndexByStop |> Map.tryFind prevCall.stopId |? nextSpineIdx
-                    let effDepSec = effectiveDepart (nextIdx - 1) prevCall
-                    if nowSec <= effDepSec then Some (float prevSpineIdx)
-                    else
-                        let p = clamp 0.02 0.98 (smoothProgress ((nowSec - effDepSec) / max 25.0 (nextCall.arriveSec - effDepSec)))
-                        Some (float prevSpineIdx + (float nextSpineIdx - float prevSpineIdx) * p)
-                else
-                    let upstreamSpineIdx =
-                        match trip.direction with
-                        | Northbound -> max 0 (nextSpineIdx - 1)
-                        | Southbound -> min (PREFERRED_STOP_ORDER.Length - 1) (nextSpineIdx + 1)
-                        | Other -> nextSpineIdx
-                    if upstreamSpineIdx <> nextSpineIdx && remSec <= 150.0 then
-                        let p = clamp 0.03 0.98 (smoothProgress (1.0 - remSec / max remSec 95.0))
-                        Some (float upstreamSpineIdx + (float nextSpineIdx - float upstreamSpineIdx) * p)
-                    else if upstreamSpineIdx = nextSpineIdx then Some (float nextSpineIdx)
-                    else None
-
-            match targetSpinePosOpt with
-            | None -> ()
-            | Some targetSpinePos ->
-                let spinePos =
-                    match Map.tryFind trip.tripId prevPositions with
-                    | None -> targetSpinePos
-                    | Some (prevSpinePos, prevTimeSec) ->
-                        let dt = clamp 0.0 60.0 (nowSec - prevTimeSec)
-                        let dirSign = if trip.direction = Southbound then -1.0 else 1.0
-                        let signedDelta = (targetSpinePos - prevSpinePos) * dirSign
-                        if signedDelta < -1.8 || signedDelta > 2.5 then targetSpinePos
-                        elif signedDelta <= 0.0 then prevSpinePos
+                // PREFERRED_STOP_ORDER runs South (F27 = 0) to North (G22 = 20)
+                let targetSpinePosOpt =
+                    if remSec <= 8.0 then
+                        Some (float nextSpineIdx)
+                    elif nextIdx > 0 then
+                        let prevCall = distinctCalls[nextIdx - 1]
+                        let prevSpineIdx = spineIndexByStop |> Map.tryFind prevCall.stopId |? nextSpineIdx
+                        let effDepSec = effectiveDepart (nextIdx - 1) prevCall
+                        if nowSec <= effDepSec then Some (float prevSpineIdx)
                         else
-                            let maxStep = dt * min 0.032 (0.013 + 0.025 * signedDelta)
-                            prevSpinePos + dirSign * min signedDelta maxStep
+                            let p = clamp 0.02 0.98 (smoothProgress ((nowSec - effDepSec) / max 25.0 (nextCall.arriveSec - effDepSec)))
+                            Some (float prevSpineIdx + (float nextSpineIdx - float prevSpineIdx) * p)
+                    else
+                        let upstreamSpineIdx =
+                            match trip.direction with
+                            | Northbound -> max 0 (nextSpineIdx - 1)
+                            | Southbound -> min (PREFERRED_STOP_ORDER.Length - 1) (nextSpineIdx + 1)
+                            | Other -> nextSpineIdx
+                        if upstreamSpineIdx <> nextSpineIdx && remSec <= 150.0 then
+                            let p = clamp 0.03 0.98 (smoothProgress (1.0 - remSec / max remSec 95.0))
+                            Some (float upstreamSpineIdx + (float nextSpineIdx - float upstreamSpineIdx) * p)
+                        elif upstreamSpineIdx = nextSpineIdx then Some (float nextSpineIdx)
+                        else None
 
-                let isStopped = Math.Abs(spinePos - Math.Round(spinePos)) < 0.02
-                nextPositions <- Map.add trip.tripId (spinePos, nowSec) nextPositions
+                targetSpinePosOpt
+                |> Option.map (fun targetSpinePos ->
+                    let spinePos =
+                        match Map.tryFind trip.tripId prevPositions with
+                        | None -> targetSpinePos
+                        | Some (prevSpinePos, prevTimeSec) ->
+                            let dt = clamp 0.0 60.0 (nowSec - prevTimeSec)
+                            let dirSign = if trip.direction = Southbound then -1.0 else 1.0
+                            let signedDelta = (targetSpinePos - prevSpinePos) * dirSign
+                            if signedDelta < -1.8 || signedDelta > 2.5 then targetSpinePos
+                            elif signedDelta <= 0.0 then prevSpinePos
+                            else
+                                let maxStep = dt * min 0.032 (0.013 + 0.025 * signedDelta)
+                                prevSpinePos + dirSign * min signedDelta maxStep
 
-                match poseAtSpinePos stopLookup trip.direction spinePos with
-                | Some (lat, lon, headingDeg) ->
-                    results.Add({
-                        tripId = trip.tripId
-                        direction = trip.direction
-                        latitude = lat
-                        longitude = lon
-                        spinePos = spinePos
-                        headingDeg = headingDeg
-                        isStopped = isStopped
-                        nextStopId = nextCall.stopId
-                    })
-                | None -> ()
+                    let isStopped = Math.Abs(spinePos - Math.Round(spinePos)) < 0.02
+                    let trainOpt =
+                        poseAtSpinePos stopLookup trip.direction spinePos
+                        |> Option.map (fun (lat, lon, headingDeg) ->
+                            { tripId = trip.tripId
+                              direction = trip.direction
+                              latitude = lat
+                              longitude = lon
+                              spinePos = spinePos
+                              headingDeg = headingDeg
+                              isStopped = isStopped
+                              nextStopId = nextCall.stopId })
+                    (trip.tripId, (spinePos, nowSec)), trainOpt)))
 
-    results.ToArray(), nextPositions
+    stepped |> Array.choose snd, stepped |> Array.map fst |> Map.ofArray
 
 let private formatHoursMinutes (m: int) (suffix: string) =
     match m / 60, m % 60 with
