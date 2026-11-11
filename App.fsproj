@@ -10,6 +10,7 @@
     <Compile Include="src/Feed.fs" />
     <Compile Include="src/Timers.fs" />
     <Compile Include="src/Ui.fs" />
+    <Compile Include="src/App.fs" />
     <Compile Include="src/Main.fs" />
   </ItemGroup>
   <ItemGroup>

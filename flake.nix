@@ -11,7 +11,7 @@
       let
         pkgs = import nixpkgs { inherit system; };
         src = pkgs.lib.cleanSource ./.;
-        npmDepsHash = "sha256-dbdbZMD3uiidJ4JLsdH1lPswiXygQdnW0zufh8/uyj4=";
+        npmDepsHash = "sha256-nyf35+ydrsgNAALPg6nbDMoSO+fnG4/0+foeJsY8CDY=";
         npmInstallFlags = [ "--legacy-peer-deps" ];
         dotnet-sdk = pkgs.dotnetCorePackages.sdk_10_0;
         nugetDeps = map pkgs.dotnetCorePackages.fetchNupkg [
@@ -84,6 +84,56 @@
             pname = "FSharp.Core";
             version = "10.1.401";
             hash = "sha256-zx9OafwtE1Gvn6mSOskO1GYIhzCgCGfL4OsbOyxolj4=";
+          }
+          {
+            pname = "Fable.Promise";
+            version = "3.2.0";
+            hash = "sha256-E5sV1LTsZn1as3ndNHixNvNIrXX7lTN3TWcKyiFelM4=";
+          }
+          {
+            pname = "Feliz.UseElmish";
+            version = "5.0.0";
+            hash = "sha256-WhWdABXdDCbPDLz9N4UlW9qlBbCtVCVKOt05u+O8EEs=";
+          }
+          {
+            pname = "Vitest";
+            version = "2.0.0";
+            hash = "sha256-YNGSvdHXhkqo3JvoiObSBbk7w7OoY9pr+jvBudSiXss=";
+          }
+          {
+            pname = "Vitest.JestDom";
+            version = "1.0.0";
+            hash = "sha256-wRAT/+35dh+q51Pli1tosPJtz1qxP2xI9hs2d9+srf0=";
+          }
+          {
+            pname = "Vitest.ReactTestingLibrary";
+            version = "1.1.0";
+            hash = "sha256-UyShbs6vXxIE1b/4HadF4/HB/MKihbx34Kp1yOEsjK0=";
+          }
+          {
+            pname = "Fable.Browser.Blob";
+            version = "1.4.0";
+            hash = "sha256-0oLelzzor71cvBeb1R47Ozkg5hQeqo5RxGrXG8G3bkA=";
+          }
+          {
+            pname = "Fable.Browser.Dom";
+            version = "2.20.0";
+            hash = "sha256-l5xb/rM5qeScyLvcYLi6VwLZEoDLUyskqvA7AWrQMkg=";
+          }
+          {
+            pname = "Fable.Browser.Event";
+            version = "1.7.0";
+            hash = "sha256-XENjfVqLWRtiUytplFZI8sWKGgpRg3LVsCTqTqsY5Pc=";
+          }
+          {
+            pname = "Fable.Browser.Gamepad";
+            version = "1.3.0";
+            hash = "sha256-diYYi5a3zzuKEeQqXVV+i9u8JJQKJKrZyXGpF2YodhU=";
+          }
+          {
+            pname = "Fable.Browser.WebStorage";
+            version = "1.3.0";
+            hash = "sha256-wV3rJoBAIH0tA7O251dnLKynblWPDWs/TW+gYhL/NQ4=";
           }
         ];
         fableEnv = {
@@ -170,7 +220,7 @@
           pname = "greenpoint-subway-web-e2e";
           version = "0.1.0";
           inherit src npmDepsHash npmInstallFlags;
-          npmBuildScript = "test:e2e";
+          npmBuildScript = "test";
           preBuild = ''
             cp ${mapSvg} g_corridor.svg
             cp ${stopsJson} stops.json

@@ -122,8 +122,8 @@ let private renderArrivals (model: Model) (dispatch: Dispatch<Msg>) (arrivals: A
                                                         svg.fill "none"
                                                         svg.stroke "currentColor"
                                                         svg.strokeWidth 2
-                                                        svg.custom ("stroke-linecap", "round")
-                                                        svg.custom ("stroke-linejoin", "round")
+                                                        svg.strokeLineCap "round"
+                                                        svg.strokeLineJoin "round"
                                                     ]
                                                 ]
                                             ]

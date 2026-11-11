@@ -8,8 +8,10 @@
     "dev": "fable watch App.fsproj --run vite",
     "build": "fable App.fsproj && vite build",
     "preview": "vite preview",
-    "typecheck": "dotnet build App.fsproj",
-    "test:e2e": "npm run build -- --emptyOutDir=false && node --test tests/e2e.test.mjs"
+    "typecheck": "dotnet build App.fsproj && dotnet build tests/Tests.fsproj",
+    "test": "npm run build && fable tests/Tests.fsproj && NODE_ENV=test vitest run",
+    "test:watch": "npm run build && NODE_ENV=test fable watch tests/Tests.fsproj --run vitest",
+    "test:e2e": "npm test"
   },
   "dependencies": {
     "bulma": "1.0.4",
@@ -18,10 +20,14 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "happy-dom": "^20.0.0",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "jsdom": "^31.0.0",
     "sass": "1.108.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
-    "vite-plugin-singlefile": "^2.3.4"
+    "vite-plugin-singlefile": "^2.3.4",
+    "vitest": "^5.1.0"
   }
 }

@@ -36,7 +36,13 @@ Standard UI components use Feliz.Bulma 5 and bundled Bulma 1 CSS. Use the Feliz.
 ## Tests
 
 - `npm run typecheck`
-- `npm run test:e2e` builds the bundle and runs a Node-based harness against the inlined `dist/index.html` output (includes stop selection). `nix flake check` executes this.
+- `npm test` builds the production page, compiles `tests/Tests.fsproj` with Fable, and runs Vitest. `nix flake check` executes the same workflow.
+- `npm run test:watch` builds the page once, then watches the F# sources and reruns tests. The standalone-page smoke test uses that initial build; run `npm test` again to verify a fresh production bundle.
+- `npm run test:e2e` remains an alias for `npm test`.
+
+Tests follow Feliz's Vitest and React Testing Library setup, using the published F# bindings. `App.test.fs` renders the app view with its actual Elmish initialization/update functions, mocked MTA responses and geolocation, and Vitest's controlled clock. `Feed.test.fs` tests decoding, direction detection, interpolation, time formatting, and generated station coordinates directly. `Bundle.test.fs` additionally boots the inlined script from `dist/index.html` in an isolated jsdom page to check production packaging. Test dependencies are excluded from the shipped page.
+
+`src/App.fs` holds the app's initialization and update functions; `src/Main.fs` is the browser entry point. The test project shares the app source files while excluding that entry point, so importing the code does not start a second app.
 
 ## GitHub Pages
 
