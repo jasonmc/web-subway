@@ -17,7 +17,65 @@
 /* Bulma styles the UI; custom styles cover the status indicator and live map. */
 :root {
   --bulma-family-primary: "Inter", sans-serif;
-  background: radial-gradient(circle at 30% 20%, #f5f7ff, #f7fafc 30%), #f7fafc;
+  --page-background: radial-gradient(circle at 30% 20%, #f5f7ff, #f7fafc 30%), #f7fafc;
+  --surface-muted: #f1f5f9;
+  --text-strong: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --divider: #e2e8f0;
+  --spotlight-background: #f0fdf4;
+  --positive-text: #15803d;
+  --error-background: #fef2f2;
+  --error-text: #991b1b;
+  --route-green: #16a34a;
+  --route-badge: #16a34a;
+  --map-water: #dbeafe;
+  --map-border: #cbd5e1;
+  --map-neighborhood-border: #dce4ee;
+  --map-corridor: #f8fafc;
+  --map-park: #dcfce7;
+  --map-park-border: #bbf7d0;
+  --map-minor-label: #94a3b8;
+  --stop-background: #ffffff;
+  --stop-label-background: rgba(255, 255, 255, 0.92);
+  --attribution-background: rgba(248, 250, 252, 0.78);
+  --track-casing: #ffffff;
+  --train-body: #0f172a;
+  --train-active: #15803d;
+  --train-passed: #64748b;
+  --location-rgb: 37, 99, 235;
+  color-scheme: light dark;
+  background: var(--page-background);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-background: radial-gradient(circle at 30% 20%, #172539, #0d1522 45%), #0d1522;
+    --surface-muted: #202b3a;
+    --text-strong: #e2e8f0;
+    --text-secondary: #cbd5e1;
+    --text-muted: #aebed2;
+    --divider: #334155;
+    --spotlight-background: #163c2b;
+    --positive-text: #86efac;
+    --error-background: #3b1c25;
+    --error-text: #fecaca;
+    --route-green: #4ade80;
+    --route-badge: #15803d;
+    --map-water: #101d2d;
+    --map-border: #465b73;
+    --map-neighborhood-border: #34475c;
+    --map-corridor: #24364b;
+    --map-park: #153e2e;
+    --map-park-border: #2e6548;
+    --map-minor-label: #b4c4d8;
+    --stop-background: #24364b;
+    --stop-label-background: rgba(15, 23, 42, 0.94);
+    --attribution-background: rgba(15, 23, 42, 0.86);
+    --track-casing: #101923;
+    --train-body: #0b111b;
+    --location-rgb: 96, 165, 250;
+  }
 }
 
 body {
@@ -62,15 +120,15 @@ body {
   line-height: 1.4;
   padding: 6px 10px;
   border-radius: 8px;
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--surface-muted);
+  color: var(--text-muted);
   font-size: 0.8rem;
   font-weight: 400;
 }
 
 .app .status.error {
-  background: #fef2f2;
-  color: #991b1b;
+  background: var(--error-background);
+  color: var(--error-text);
 }
 
 /* Keep Bulma’s columns, with enough room for the map at tablet sizes and up. */
@@ -103,7 +161,7 @@ body {
   padding: 10px 6px;
   margin: 0 -6px;
   border-radius: 8px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--divider);
   transition: background-color 150ms ease;
 }
 
@@ -112,7 +170,7 @@ body {
 }
 
 .arrival.is-spotlight {
-  background: #f0fdf4;
+  background: var(--spotlight-background);
 }
 
 .arrival:last-child {
@@ -130,13 +188,13 @@ body {
 
 .arrival-where {
   font-size: 0.78rem;
-  color: #64748b;
+  color: var(--text-muted);
   padding-left: 34px;
   line-height: 1.25;
 }
 
 .arrival-next .arrival-where {
-  color: #15803d;
+  color: var(--positive-text);
   font-weight: 600;
 }
 
@@ -147,7 +205,7 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #16a34a;
+  background: var(--route-badge);
   color: white;
   font-weight: 700;
   font-size: 0.95rem;
@@ -155,7 +213,7 @@ body {
 
 .time {
   font-variant-numeric: tabular-nums;
-  color: #0f172a;
+  color: var(--text-strong);
   font-weight: 600;
   white-space: nowrap;
   flex-shrink: 0;
@@ -165,7 +223,7 @@ body {
 .meta {
   font-variant-numeric: tabular-nums;
   font-size: 0.9rem;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .map-section:empty {
@@ -184,8 +242,8 @@ body {
   margin: 0 auto;
   border-radius: 12px;
   overflow: hidden;
-  background: #dbeafe;
-  border: 1px solid #cbd5e1;
+  background: var(--map-water);
+  border: 1px solid var(--map-border);
 }
 
 .osm-tiles,
@@ -203,59 +261,59 @@ body {
 }
 
 .vec-water-bg {
-  fill: #dbeafe;
+  fill: var(--map-water);
 }
 
 .vec-land {
   fill: none;
-  stroke: #cbd5e1;
+  stroke: var(--map-border);
   stroke-width: 1.6;
   stroke-linejoin: round;
 }
 
 .vec-land-fill {
-  fill: #f1f5f9;
+  fill: var(--surface-muted);
   stroke: none;
 }
 
 .vec-hood-bg {
-  fill: #f1f5f9;
-  stroke: #dce4ee;
+  fill: var(--surface-muted);
+  stroke: var(--map-neighborhood-border);
   stroke-width: 0.95;
   stroke-linejoin: round;
 }
 
 .vec-hood-corridor {
-  fill: #f8fafc;
-  stroke: #cbd5e1;
+  fill: var(--map-corridor);
+  stroke: var(--map-border);
   stroke-width: 1.1;
   stroke-linejoin: round;
 }
 
 .vec-water-inlets path {
-  fill: #dbeafe;
-  stroke: #cbd5e1;
+  fill: var(--map-water);
+  stroke: var(--map-border);
   stroke-width: 1.1;
   stroke-linejoin: round;
 }
 
 .vec-park {
-  fill: #dcfce7;
-  stroke: #bbf7d0;
+  fill: var(--map-park);
+  stroke: var(--map-park-border);
   stroke-width: 0.8;
   stroke-linejoin: round;
 }
 
 .vec-lakes path {
-  fill: #dbeafe;
-  stroke: #bbf7d0;
+  fill: var(--map-water);
+  stroke: var(--map-park-border);
   stroke-width: 0.8;
   stroke-linejoin: round;
 }
 
 .osm-track-casing {
   fill: none;
-  stroke: #ffffff;
+  stroke: var(--track-casing);
   stroke-width: 7;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -263,7 +321,7 @@ body {
 
 .osm-track-line {
   fill: none;
-  stroke: #16a34a;
+  stroke: var(--route-green);
   stroke-width: 4;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -276,31 +334,31 @@ body {
   paint-order: stroke;
   stroke-width: 2.8px;
   stroke-linejoin: round;
-  fill: #64748b;
-  stroke: #f8fafc;
+  fill: var(--text-muted);
+  stroke: var(--map-corridor);
   font-size: 6.6px;
   font-weight: 700;
   opacity: 0.82;
 }
 
 .vec-label-water {
-  fill: #64748b;
-  stroke: #dbeafe;
+  fill: var(--text-muted);
+  stroke: var(--map-water);
   font-size: 6.5px;
   font-style: italic;
   opacity: 0.78;
 }
 
 .vec-label-park {
-  fill: #15803d;
-  stroke: #dcfce7;
+  fill: var(--positive-text);
+  stroke: var(--map-park);
   font-size: 6.3px;
   opacity: 0.72;
 }
 
 .vec-label-manh {
-  fill: #94a3b8;
-  stroke: #f1f5f9;
+  fill: var(--map-minor-label);
+  stroke: var(--surface-muted);
   font-size: 6.2px;
   font-weight: 600;
   opacity: 0.75;
@@ -313,8 +371,8 @@ body {
   height: 10px;
   padding: 0;
   border-radius: 50%;
-  background: #ffffff;
-  border: 2px solid #16a34a;
+  background: var(--stop-background);
+  border: 2px solid var(--route-green);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
   z-index: 2;
 }
@@ -326,7 +384,7 @@ body {
 .osm-stop-selected {
   width: 14px;
   height: 14px;
-  background: #16a34a;
+  background: var(--route-green);
   border: 2px solid #ffffff;
   box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.35);
   z-index: 5;
@@ -345,7 +403,7 @@ body {
   position: absolute;
   inset: 1px;
   border-radius: 50%;
-  background: #2563eb;
+  background: rgb(var(--location-rgb));
   border: 2.5px solid #ffffff;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
 }
@@ -354,8 +412,8 @@ body {
   position: absolute;
   inset: -5px;
   border-radius: 50%;
-  background: rgba(37, 99, 235, 0.22);
-  border: 1px solid rgba(37, 99, 235, 0.35);
+  background: rgba(var(--location-rgb), 0.22);
+  border: 1px solid rgba(var(--location-rgb), 0.35);
   animation: osm-user-pulse 2.4s ease-out infinite;
 }
 
@@ -379,8 +437,8 @@ body {
   left: 14px;
   top: 50%;
   transform: translateY(-50%);
-  background: rgba(255, 255, 255, 0.92);
-  color: #0f172a;
+  background: var(--stop-label-background);
+  color: var(--text-strong);
   font-size: 0.72rem;
   font-weight: 700;
   padding: 1px 5px;
@@ -415,7 +473,7 @@ body {
 }
 
 .osm-train-next .osm-train-badge {
-  fill: #15803d;
+  fill: var(--train-active);
 }
 
 .osm-train-passed {
@@ -424,7 +482,7 @@ body {
 }
 
 .osm-train-passed .osm-train-badge {
-  fill: #64748b;
+  fill: var(--train-passed);
 }
 
 .osm-train.is-spotlight {
@@ -435,7 +493,7 @@ body {
 }
 
 .osm-train.is-spotlight .osm-train-badge {
-  fill: #15803d;
+  fill: var(--train-active);
 }
 
 .osm-train-svg {
@@ -446,7 +504,7 @@ body {
 }
 
 .osm-train-badge {
-  fill: #0f172a;
+  fill: var(--train-body);
   stroke: #ffffff;
   stroke-width: 1.8;
   stroke-linejoin: round;
@@ -480,8 +538,8 @@ body {
   z-index: 3;
   font-size: 0.62rem;
   line-height: 1.2;
-  color: #64748b;
-  background: rgba(248, 250, 252, 0.78);
+  color: var(--text-muted);
+  background: var(--attribution-background);
   padding: 1px 5px;
   border-radius: 4px;
 }
@@ -492,6 +550,6 @@ body {
 }
 
 .osm-attrib a:hover {
-  color: #334155;
+  color: var(--text-secondary);
   text-decoration: underline;
 }

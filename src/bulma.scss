@@ -11,11 +11,18 @@
 @use "bulma/sass/grid/columns";
 @use "bulma/sass/helpers/spacing";
 
-// The HTML shell explicitly selects the light theme; omit unused dark themes.
+// Follow the system preference without requiring JavaScript or a saved setting.
 @use "bulma/sass/themes/light";
+@use "bulma/sass/themes/dark";
 @use "bulma/sass/themes/setup";
 
 :root {
   @include light.light-theme;
   @include setup.setup-theme;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    @include dark.dark-theme;
+  }
 }
