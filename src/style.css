@@ -1,6 +1,22 @@
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url("../inter-fonts/web/InterVariable.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: block;
+  src: url("../inter-fonts/web/InterVariable-Italic.woff2") format("woff2");
+}
+
 /* Bulma styles the UI; custom styles cover the status indicator and live map. */
 :root {
-  --bulma-family-primary: "Soehne", "Helvetica Neue", Arial, sans-serif;
+  --bulma-family-primary: "Inter", sans-serif;
   background: radial-gradient(circle at 30% 20%, #f5f7ff, #f7fafc 30%), #f7fafc;
 }
 
@@ -34,6 +50,22 @@ body {
   font-size: 0.85rem;
   color: #4f46e5;
   font-weight: 700;
+}
+
+.station-icon {
+  display: inline-block;
+  width: 1.25em;
+  height: 1.25em;
+  margin-right: 0.4em;
+  vertical-align: -0.25em;
+}
+
+.direction-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 0.35em;
+  vertical-align: -0.125em;
 }
 
 .sub {
@@ -253,7 +285,7 @@ body {
 }
 
 .vec-label {
-  font-family: "Soehne", "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--bulma-family-primary);
   text-anchor: middle;
   letter-spacing: 1px;
   paint-order: stroke;

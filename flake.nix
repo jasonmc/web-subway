@@ -129,6 +129,20 @@
         } ''
           bash ${./scripts/build-map-svg.sh} ${./data/osm_corridor.osm.pbf} ${nycNeighborhoods} $out
         '';
+        interFonts = pkgs.runCommand "inter-webfonts" {
+          nativeBuildInputs = [ pkgs.harfbuzz pkgs.woff2 ];
+        } ''
+          mkdir -p $out/web
+          # Keep Latin and punctuation while preserving both variable-font axes.
+          for font in InterVariable InterVariable-Italic; do
+            hb-subset ${pkgs.inter}/share/fonts/truetype/$font.ttf \
+              --unicodes=0020-00FF,2000-206F \
+              --output-file=$out/web/$font.ttf
+            woff2_compress $out/web/$font.ttf
+            rm $out/web/$font.ttf
+          done
+          cp ${pkgs.inter.src}/LICENSE.txt $out/LICENSE.txt
+        '';
         web = pkgs.buildNpmPackage ({
           pname = "greenpoint-subway-web";
           version = "0.1.0";
@@ -137,6 +151,7 @@
           preBuild = ''
             cp ${mapSvg} g_corridor.svg
             cp ${stopsJson} stops.json
+            ln -s ${interFonts} inter-fonts
           '';
           installPhase = ''
             runHook preInstall
@@ -158,6 +173,7 @@
           preBuild = ''
             cp ${mapSvg} g_corridor.svg
             cp ${stopsJson} stops.json
+            ln -s ${interFonts} inter-fonts
           '';
           installPhase = ''
             runHook preInstall
@@ -169,6 +185,7 @@
         packages.default = web;
         packages.map-svg = mapSvg;
         packages.stops-json = stopsJson;
+        packages.inter-fonts = interFonts;
         checks.e2e = tests;
         devShells.default = pkgs.mkShell {
           inputsFrom = [ web ];
@@ -176,6 +193,7 @@
           shellHook = ''
             ln -sf ${mapSvg} g_corridor.svg
             ln -sf ${stopsJson} stops.json
+            ln -sfn ${interFonts} inter-fonts
           '';
         };
       });

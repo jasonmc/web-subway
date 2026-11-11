@@ -29,6 +29,8 @@ The stops CSV is embedded directly in the single HTML build. Enable HTTP compres
 
 ## Styling
 
+Inter comes from the locked nixpkgs `inter` package under the SIL Open Font License. Nix uses HarfBuzz's `hb-subset` and `woff2_compress` to subset both upright and italic fonts to Basic Latin, accented Latin, and punctuation. Both retain the original weight and optical-size axes, preserving how the font adapts to different text sizes. Changing labels or weights does not require changing the subset. `nix develop` links these generated files as `inter-fonts`; Nix builds supply the same files automatically. The UI and map labels share this font, and the header train and direction arrows use inline SVGs so their appearance does not depend on the operating system's emoji font. Vite embeds the fonts and their license in the single HTML output; no font service is needed at runtime.
+
 Standard UI components use Feliz.Bulma 5 and bundled Bulma 1 CSS. Use the Feliz.Bulma API in `src/Ui.fs` for cards, form fields, notifications, and columns. `src/style.css` retains the compact feed-age indicator and wider map column, alongside the custom arrival rows and map/animation styles. Other UI styling follows Bulma defaults. `src/bulma.scss` imports only the Bulma modules the UI uses and its light theme; add new component modules there as needed. This stylesheet is imported before the custom styles in `src/Main.fs`. All CSS remains embedded in the single-file build.
 
 ## Tests

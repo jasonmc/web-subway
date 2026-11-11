@@ -45,9 +45,9 @@ let private renderArrivals (model: Model) (dispatch: Dispatch<Msg>) (arrivals: A
         |> Map.ofArray
 
     let cards = [
-        "Northbound", "⬆️", arrivals.Northbound
-        "Southbound", "⬇️", arrivals.Southbound
-        "Other", "⬜", arrivals.Other
+        "Northbound", "M12 20 V4 M5 11 L12 4 L19 11", arrivals.Northbound
+        "Southbound", "M12 4 V20 M5 13 L12 20 L19 13", arrivals.Southbound
+        "Other", "M5 5 H19 V19 H5 Z", arrivals.Other
     ]
 
     let renderedCards =
@@ -111,7 +111,24 @@ let private renderArrivals (model: Model) (dispatch: Dispatch<Msg>) (arrivals: A
                                     Bulma.title.h2 [
                                         Feliz.Bulma.title.is5
                                         prop.className "mb-3"
-                                        prop.text $"{icon} {title}"
+                                        prop.children [
+                                            Svg.svg [
+                                                svg.className "direction-icon"
+                                                svg.viewBox (0, 0, 24, 24)
+                                                svg.custom ("aria-hidden", "true")
+                                                svg.children [
+                                                    Svg.path [
+                                                        svg.d icon
+                                                        svg.fill "none"
+                                                        svg.stroke "currentColor"
+                                                        svg.strokeWidth 2
+                                                        svg.custom ("stroke-linecap", "round")
+                                                        svg.custom ("stroke-linejoin", "round")
+                                                    ]
+                                                ]
+                                            ]
+                                            Html.text title
+                                        ]
                                     ]
                                     yield! rows
                                 ]
@@ -333,7 +350,18 @@ let view (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
                     Html.p [
                         prop.className "eyebrow"
                         prop.children [
-                            Html.text "🚇 "
+                            Svg.svg [
+                                svg.className "station-icon"
+                                svg.viewBox (0, 0, 24, 24)
+                                svg.custom ("aria-hidden", "true")
+                                svg.children [
+                                    Svg.rect [ svg.x 4; svg.y 2; svg.width 16; svg.height 18; svg.rx 4; svg.fill "currentColor" ]
+                                    Svg.rect [ svg.x 6.5; svg.y 5; svg.width 11; svg.height 7; svg.rx 1; svg.fill "#ffffff" ]
+                                    Svg.circle [ svg.cx 8; svg.cy 16; svg.r 1.5; svg.fill "#ffffff" ]
+                                    Svg.circle [ svg.cx 16; svg.cy 16; svg.r 1.5; svg.fill "#ffffff" ]
+                                    Svg.path [ svg.d "M7 23 L10 19 H14 L17 23 H15 L13.5 21 H10.5 L9 23 Z"; svg.fill "currentColor" ]
+                                ]
+                            ]
                             Html.span [
                                 prop.id "stop-name"
                                 prop.text (stopLabel model.stopLookup model.selectedStopPrefix)
