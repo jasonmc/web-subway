@@ -383,11 +383,13 @@ let private formatHoursMinutes (m: int) (suffix: string) =
     | h, min -> $"{h}h {min}m{suffix}"
 
 let formatRelative (target: DateTime) : string =
-    match roundInt (target - DateTime.Now).TotalMinutes with
-    | m when m <= 0 -> "due"
-    | 1 -> "in 1 min"
-    | m when m < 60 -> $"in {m} min"
-    | m -> "in " + formatHoursMinutes m ""
+    let remaining = target - DateTime.Now
+    if remaining.TotalSeconds <= 0.0 then "due"
+    elif remaining.TotalMinutes < 1.0 then "<1 min"
+    else
+        match int (Math.Floor remaining.TotalMinutes) with
+        | m when m < 60 -> $"in {m} min"
+        | m -> "in " + formatHoursMinutes m ""
 
 let formatAge (target: DateTime) : string =
     match roundInt (DateTime.Now - target).TotalSeconds with

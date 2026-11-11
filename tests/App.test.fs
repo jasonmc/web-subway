@@ -32,7 +32,7 @@ Vitest.test("renders arrivals, updates countdowns, and refreshes after a failed 
 
     vi.setSystemTime(Feed.createDateMs(fixedNowMs + 60000.0))
     do! advance 1000
-    do! RTL.waitFor(fun () -> Vitest.expect(lists).toHaveTextContent "in 1 min")
+    do! RTL.waitFor(fun () -> Vitest.expect(lists).toHaveTextContent "<1 min")
     let arrivalTimes () =
         let times = lists.querySelectorAll ".time"
         [| for index in 0 .. times.length - 1 -> times.item(index).textContent |]

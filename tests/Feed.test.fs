@@ -38,10 +38,26 @@ Vitest.test("interpolates between stations and keeps a moving train progressing 
     Vitest.expect(moved.latitude).toBeGreaterThan north.latitude
     Vitest.expect(moved.spinePos).toBeGreaterThan north.spinePos)
 
-Vitest.test("formats due arrivals, whole minutes, and nonpositive headways", fun () ->
-    Vitest.expect(formatRelative (createDateMs fixedNowMs)).toBe "due"
-    Vitest.expect(formatRelative (createDateMs(fixedNowMs + 60000.0))).toBe "in 1 min"
-    Vitest.expect(formatRelative (createDateMs(fixedNowMs + 3600000.0))).toBe "in 1h"
+for seconds, expected in [
+    -1.0, "due"
+    0.0, "due"
+    0.001, "<1 min"
+    30.0, "<1 min"
+    50.0, "<1 min"
+    59.999, "<1 min"
+    60.0, "in 1 min"
+    90.0, "in 1 min"
+    119.999, "in 1 min"
+    120.0, "in 2 min"
+    3599.999, "in 59 min"
+    3600.0, "in 1h"
+    3659.999, "in 1h"
+    3660.0, "in 1h 1m"
+] do
+    Vitest.test($"formats an arrival {seconds} seconds away as {expected}", fun () ->
+        Vitest.expect(formatRelative (createDateMs(fixedNowMs + seconds * 1000.0))).toBe expected)
+
+Vitest.test("omits nonpositive headways", fun () ->
     let arrival: Arrival = {
         time = createDateMs fixedNowMs
         route = "G"
