@@ -137,6 +137,7 @@
           for font in InterVariable InterVariable-Italic; do
             hb-subset ${pkgs.inter}/share/fonts/truetype/$font.ttf \
               --unicodes=0020-00FF,2000-206F \
+              --layout-features+=tnum \
               --output-file=$out/web/$font.ttf
             woff2_compress $out/web/$font.ttf
             rm $out/web/$font.ttf

@@ -346,49 +346,16 @@ let view (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
         Html.header [
             prop.className "app-header"
             prop.children [
-                Html.div [
-                    Html.p [
-                        prop.className "eyebrow"
-                        prop.children [
-                            Svg.svg [
-                                svg.className "station-icon"
-                                svg.viewBox (0, 0, 24, 24)
-                                svg.custom ("aria-hidden", "true")
-                                svg.children [
-                                    Svg.rect [ svg.x 4; svg.y 2; svg.width 16; svg.height 18; svg.rx 4; svg.fill "currentColor" ]
-                                    Svg.rect [ svg.x 6.5; svg.y 5; svg.width 11; svg.height 7; svg.rx 1; svg.fill "#ffffff" ]
-                                    Svg.circle [ svg.cx 8; svg.cy 16; svg.r 1.5; svg.fill "#ffffff" ]
-                                    Svg.circle [ svg.cx 16; svg.cy 16; svg.r 1.5; svg.fill "#ffffff" ]
-                                    Svg.path [ svg.d "M7 23 L10 19 H14 L17 23 H15 L13.5 21 H10.5 L9 23 Z"; svg.fill "currentColor" ]
-                                ]
-                            ]
-                            Html.span [
-                                prop.id "stop-name"
-                                prop.text (stopLabel model.stopLookup model.selectedStopPrefix)
-                            ]
-                        ]
-                    ]
-                    Bulma.title.h1 [
-                        title.is3
-                        prop.className "mt-1 mb-2"
-                        prop.text "Live G train arrivals"
-                    ]
-                    Html.p [
-                        prop.className "sub"
-                        prop.text "Your nearest G train station, or choose a station below"
-                    ]
-                ]
                 Bulma.field.div [
                     prop.className "station-field mb-0"
                     prop.children [
-                        Bulma.label [
-                            prop.htmlFor "stop-select"
-                            prop.text "Station"
-                        ]
                         Bulma.control.div [
                             Bulma.select [
+                                select.isMedium
+                                color.isSuccess
                                 prop.id "stop-select"
                                 prop.name "stop-select"
+                                prop.ariaLabel "Station"
                                 prop.value model.selectedStopPrefix
                                 prop.onChange (fun (value: string) -> dispatch (SelectStop value))
                                 prop.children [
@@ -404,15 +371,15 @@ let view (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
                         ]
                     ]
                 ]
+                Bulma.notification [
+                    prop.id "status"
+                    prop.role "status"
+                    color.isLight
+                    if isError then color.isDanger else color.isInfo
+                    prop.className (if isError then "status error" else "status")
+                    prop.text statusText
+                ]
             ]
-        ]
-        Bulma.notification [
-            prop.id "status"
-            prop.role "status"
-            color.isLight
-            if isError then color.isDanger else color.isInfo
-            prop.className (if isError then "status error" else "status")
-            prop.text statusText
         ]
         Bulma.columns [
             prop.className "app-content"

@@ -254,9 +254,9 @@ test("renders arrivals from bundled app and refreshes", async () => {
     "dropdown limited to current stops"
   );
   assert.equal(
-    document.get("#stop-name").textContent,
+    document.get("#stop-select").selectedOptions[0].textContent,
     "Greenpoint Av",
-    "header shows current stop name"
+    "dropdown shows current stop name"
   );
 
   const beforeHtml = document.get("#lists").innerHTML;
@@ -300,9 +300,9 @@ test("preserves selected stop when current feed has no arrivals for it", async (
     "keeps the requested stop selected"
   );
   assert.equal(
-    document.get("#stop-name").textContent,
+    document.get("#stop-select").selectedOptions[0].textContent,
     "Court Sq",
-    "header keeps the selected stop label"
+    "dropdown keeps the selected stop label"
   );
   assert.ok(
     document.get("#stop-select").innerHTML.includes('value="G22"'),
@@ -345,7 +345,7 @@ for (const [latitude, longitude, id, name, hash] of [
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     assert.equal(document.get("#stop-select").value, id);
-    assert.equal(document.get("#stop-name").textContent, name);
+    assert.equal(document.get("#stop-select").selectedOptions[0].textContent, name);
     assert.equal(context.location.hash, `#${id}`);
     assert.ok(document.get("#lists").innerHTML.includes("No arrivals in the feed."),
       "nearest station remains selected even without arrivals");
