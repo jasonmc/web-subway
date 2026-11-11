@@ -175,15 +175,15 @@ let private renderStations (model: Model) (dispatch: Dispatch<Msg>) : ReactEleme
 
     let userLoc =
         match model.userLocation with
-        | Some (lat, lon) ->
-            let px, py = projectToMapPx lat lon
+        | Some coords ->
+            let px, py = projectToMapPx coords.latitude coords.longitude
             if px >= 0.0 && px <= MAP_WIDTH && py >= 0.0 && py <= MAP_HEIGHT then
                 let leftPct, topPct = pxToMapPercent px py
                 [ Html.div [
                       prop.key "user-location"
                       prop.className "osm-user-location"
-                      prop.custom ("data-lat", string lat)
-                      prop.custom ("data-lon", string lon)
+                      prop.custom ("data-lat", string coords.latitude)
+                      prop.custom ("data-lon", string coords.longitude)
                       prop.title "Your location"
                       prop.ariaLabel "Your location"
                       prop.style [ style.custom ("left", leftPct); style.custom ("top", topPct) ]

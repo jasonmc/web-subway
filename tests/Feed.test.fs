@@ -6,6 +6,7 @@ open State
 open Feed
 open Tests.Fixtures
 open Time
+open Geography
 
 Vitest.beforeEach(fun () -> resetBrowser "")
 
@@ -37,7 +38,7 @@ Vitest.test("interpolates between stations and keeps a moving train progressing 
     Vitest.expect(north.latitude).toBeLessThan 40.731352
     let later, _ = estimateTrainPositions (fixedNowSec + 30.0<seconds>) lookup positions trips
     let moved = later |> Array.find (fun train -> train.tripId = north.tripId)
-    Vitest.expect(moved.latitude).toBeGreaterThan north.latitude
+    Vitest.expect(moved.latitude).toBeGreaterThan (float north.latitude)
     Vitest.expect(moved.spinePos).toBeGreaterThan north.spinePos)
 
 for seconds, expected in [
@@ -81,6 +82,14 @@ Vitest.test("omits nonpositive headways", fun () ->
 
 Vitest.test("generated station data supplies coordinates used for location and map placement", fun () ->
     let _, lookup, _, _, _ = Stops.initStops()
-    Vitest.expect(lookup["G22"].latitude).toEqual(Some 40.746554)
-    Vitest.expect(lookup["G22"].longitude).toEqual(Some -73.943832)
-    Vitest.expect(lookup["G26"].latitude).toEqual(Some 40.731352))
+    Vitest.expect(lookup["G22"].latitude).toEqual(Some 40.746554<latitude>)
+    Vitest.expect(lookup["G22"].longitude).toEqual(Some -73.943832<longitude>)
+    Vitest.expect(lookup["G26"].latitude).toEqual(Some 40.731352<latitude>))
+
+Vitest.test("projects the map's western and eastern corners without swapping coordinate axes", fun () ->
+    let westX, westY = projectToMapPx 40.74835<latitude> -74.03<longitude>
+    let eastX, eastY = projectToMapPx 40.74835<latitude> -73.909<longitude>
+    Vitest.expect(westX).toBeCloseTo 0.0
+    Vitest.expect(westY).toBeCloseTo 0.0
+    Vitest.expect(eastX).toBeCloseTo MAP_WIDTH
+    Vitest.expect(eastY).toBeCloseTo 0.0)

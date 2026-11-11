@@ -5,23 +5,25 @@ open Fable.Core
 open Config
 open State
 open Time
+open Geography
 
 let MAP_WIDTH = 440.0
 let MAP_HEIGHT = 510.0
 
-let private mercatorY (lat: float) =
-    Math.Log(Math.Tan((90.0 + lat) * Math.PI / 360.0)) * (180.0 / Math.PI)
+let private mercatorY (lat: float<latitude>) =
+    Math.Log(Math.Tan((90.0 + float lat) * Math.PI / 360.0)) * (180.0 / Math.PI)
 
-let private LON_MIN, LON_MAX, LAT_MAX = -74.03, -73.909, 40.74835
+let private LON_MIN, LON_MAX, LAT_MAX = -74.03<longitude>, -73.909<longitude>, 40.74835<latitude>
 let private Y_MAX = mercatorY LAT_MAX
-let private MAP_SCALE = MAP_WIDTH / (LON_MAX - LON_MIN)
+let private MAP_SCALE = MAP_WIDTH / float (LON_MAX - LON_MIN)
 
-let projectToMapPx (lat: float) (lon: float) : float * float =
-    (lon - LON_MIN) * MAP_SCALE, (Y_MAX - mercatorY lat) * MAP_SCALE
+let projectToMapPx (lat: float<latitude>) (lon: float<longitude>) : float * float =
+    float (lon - LON_MIN) * MAP_SCALE, (Y_MAX - mercatorY lat) * MAP_SCALE
 
-let private mapPxToLatLon (px: float) (py: float) : float * float =
+let private mapPxToLatLon (px: float) (py: float) : float<latitude> * float<longitude> =
     let lat = (2.0 * Math.Atan(Math.Exp((Y_MAX - py / MAP_SCALE) * Math.PI / 180.0)) - Math.PI / 2.0) * (180.0 / Math.PI)
-    lat, LON_MIN + px / MAP_SCALE
+    LanguagePrimitives.FloatWithMeasure<latitude> lat,
+    LON_MIN + LanguagePrimitives.FloatWithMeasure<longitude> (px / MAP_SCALE)
 
 [<Emit("($0).toFixed($1)")>]
 let toFixed (value: float) (digits: int) : string = jsNative
@@ -29,7 +31,7 @@ let toFixed (value: float) (digits: int) : string = jsNative
 let pxToMapPercent (px: float) (py: float) : string * string =
     toFixed ((px / MAP_WIDTH) * 100.0) 3 + "%", toFixed ((py / MAP_HEIGHT) * 100.0) 3 + "%"
 
-let projectToMapPercent (lat: float) (lon: float) : string * string =
+let projectToMapPercent (lat: float<latitude>) (lon: float<longitude>) : string * string =
     let px, py = projectToMapPx lat lon
     pxToMapPercent px py
 
@@ -267,7 +269,7 @@ let extractRawTrips (feed: IFeedMessage) : RawTrainTrip array =
     |> Array.sortBy _.tripId
 
 // Interpolate a continuous index (0.0 .. 20.0) along PREFERRED_STOP_ORDER into (latitude, longitude, headingDeg)
-let private poseAtSpinePos (stopLookup: Map<string, StopOption>) (direction: Direction) (spinePos: float) : (float * float * float) option =
+let private poseAtSpinePos (stopLookup: Map<string, StopOption>) (direction: Direction) (spinePos: float) : (float<latitude> * float<longitude> * float) option =
     let maxIdx = PREFERRED_STOP_ORDER.Length - 1
     let clamped = clamp 0.0 (float maxIdx) spinePos
     let i0 = int (Math.Floor(clamped))

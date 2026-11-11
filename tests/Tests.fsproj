@@ -5,6 +5,7 @@
   <ItemGroup>
     <!-- Share the app code without executing its browser entry point. -->
     <Compile Include="../src/Time.fs" />
+    <Compile Include="../src/Geography.fs" />
     <Compile Include="../src/Config.fs" />
     <Compile Include="../src/State.fs" />
     <Compile Include="../src/Stops.fs" />

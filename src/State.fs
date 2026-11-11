@@ -2,6 +2,7 @@ module State
 
 open System
 open Time
+open Geography
 
 type Direction = Northbound | Southbound | Other
 
@@ -24,8 +25,8 @@ type FeedMeta = { headerTimestampMs: float<milliseconds> option }
 type StopOption = {
     id: string
     name: string
-    latitude: float option
-    longitude: float option
+    latitude: float<latitude> option
+    longitude: float<longitude> option
 }
 
 type TrainStopCall = {
@@ -43,8 +44,8 @@ type RawTrainTrip = {
 type EstimatedTrain = {
     tripId: string
     direction: Direction
-    latitude: float
-    longitude: float
+    latitude: float<latitude>
+    longitude: float<longitude>
     spinePos: float
     headingDeg: float
     isStopped: bool
@@ -73,7 +74,7 @@ type Model = {
     rawTrips: RawTrainTrip array
     spinePosByTrip: Map<string, float * float<seconds>>
     mapTrains: EstimatedTrain array
-    userLocation: (float * float) option
+    userLocation: Coordinates option
     spotlightTripId: string option
     status: StatusDisplay
 }
@@ -81,7 +82,7 @@ type Model = {
 // Elmish Messages
 type Msg =
     | SelectStop of stopId: string
-    | GeoResolved of (string * (float * float)) option
+    | GeoResolved of (string * Coordinates) option
     | RefreshFeed of showLoading: bool
     | FeedLoaded of Result<Set<string> * ArrivalGroup * FeedMeta * RawTrainTrip array, string>
     | SetSpotlight of string option

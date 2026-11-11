@@ -6,6 +6,7 @@ open Config
 open State
 
 [<ImportDefault("../stops.json")>]
+// The generated JSON schema supplies latitude/longitude in decimal degrees.
 let private stopOptions: StopOption array = jsNative
 
 let private stopFromLocation () : string option =

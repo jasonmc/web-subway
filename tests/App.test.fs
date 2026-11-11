@@ -119,6 +119,9 @@ let private failures: (string * GeoRequest) list = [
     "timeout", (fun _ error _ -> error(box {| code = 3 |}))
     "API throws", (fun _ _ _ -> failwith "unavailable")
     "invalid coordinates", (fun success _ _ -> success(position nan -73.94))
+    "latitude outside its range", (fun success _ _ -> success(position 91.0 -73.94))
+    "longitude outside its range", (fun success _ _ -> success(position 40.73 -181.0))
+    "infinite longitude", (fun success _ _ -> success(position 40.73 infinity))
 ]
 
 for scenario, request in failures do

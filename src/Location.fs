@@ -4,13 +4,14 @@ open System
 open Fable.Core
 open Config
 open State
+open Geography
 
-let private nearestStop (stopLookup: Map<string, StopOption>) (lat: float) (lon: float) : string option =
-    if not (isFinite lat && isFinite lon) || abs lat > 90.0 || abs lon > 180.0 then
+let private nearestStop (stopLookup: Map<string, StopOption>) (lat: float<latitude>) (lon: float<longitude>) : string option =
+    if not (isFinite (float lat) && isFinite (float lon)) || abs lat > 90.0<latitude> || abs lon > 180.0<longitude> then
         None
     else
-        let rad deg = deg * Math.PI / 180.0
-        let haversine sLat sLon =
+        let rad (deg: float<'u>) = float deg * Math.PI / 180.0
+        let haversine (sLat: float<latitude>) (sLon: float<longitude>) =
             (sin (rad (sLat - lat) / 2.0) ** 2.0)
             + cos (rad lat) * cos (rad sLat) * (sin (rad (sLon - lon) / 2.0) ** 2.0)
 
@@ -36,7 +37,7 @@ let private hasGeolocation () : bool = jsNative
 [<Emit("navigator.geolocation.getCurrentPosition($0, $1, { timeout: 8000, maximumAge: 60000 })")>]
 let private getCurrentPosition (onSuccess: IGeoPosition -> unit) (onError: obj -> unit) : unit = jsNative
 
-let nearestStopFromDevice (stopLookup: Map<string, StopOption>) () : Async<(string * (float * float)) option> =
+let nearestStopFromDevice (stopLookup: Map<string, StopOption>) () : Async<(string * Coordinates) option> =
     Async.FromContinuations(fun (resolve, _, _) ->
         if not (hasGeolocation ()) then
             resolve None
@@ -44,11 +45,13 @@ let nearestStopFromDevice (stopLookup: Map<string, StopOption>) () : Async<(stri
             try
                 getCurrentPosition
                     (fun pos ->
-                        let lat = pos.coords.latitude
-                        let lon = pos.coords.longitude
+                        let coords = {
+                            latitude = LanguagePrimitives.FloatWithMeasure<latitude> pos.coords.latitude
+                            longitude = LanguagePrimitives.FloatWithMeasure<longitude> pos.coords.longitude
+                        }
                         let result =
-                            nearestStop stopLookup lat lon
-                            |> Option.map (fun stopId -> stopId, (lat, lon))
+                            nearestStop stopLookup coords.latitude coords.longitude
+                            |> Option.map (fun stopId -> stopId, coords)
                         resolve result)
                     (fun _ -> resolve None)
             with _ -> resolve None)
