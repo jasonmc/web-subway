@@ -11,6 +11,7 @@ open Location
 open Feed
 open Timers
 open Ui
+open Time
 
 type IResponse =
     abstract ok: bool
@@ -37,21 +38,21 @@ let private fetchAndParse (stopIdPrefix: string) () : Async<Set<string> * Arriva
 }
 
 let private recomputeTrains
-    (headerTimestampMs: float option)
+    (headerTimestampMs: float<milliseconds> option)
     (stopLookup: Map<string, StopOption>)
-    (prevPositions: Map<string, float * float>)
+    (prevPositions: Map<string, float * float<seconds>>)
     (rawTrips: RawTrainTrip array)
-    : EstimatedTrain array * Map<string, float * float> =
+    : EstimatedTrain array * Map<string, float * float<seconds>> =
     estimateTrainPositions (effectiveNowSec headerTimestampMs) stopLookup prevPositions rawTrips
 
 let private startRefreshSub : Cmd<Msg> =
     Cmd.ofEffect (fun dispatch ->
-        scheduleRefresh (fun () -> dispatch (RefreshFeed false)) 5000)
+        scheduleRefresh (fun () -> dispatch (RefreshFeed false)) 5000<milliseconds>)
 
 let private startTimersSub : Cmd<Msg> =
     Cmd.ofEffect (fun dispatch ->
-        scheduleRefresh (fun () -> dispatch (RefreshFeed false)) 5000
-        scheduleAgeTicker (fun () -> dispatch TickAge) 1000)
+        scheduleRefresh (fun () -> dispatch (RefreshFeed false)) 5000<milliseconds>
+        scheduleAgeTicker (fun () -> dispatch TickAge) 1000<milliseconds>)
 
 // Elmish Init
 let init () : Model * Cmd<Msg> =

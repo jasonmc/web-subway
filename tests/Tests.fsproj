@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Share the app code without executing its browser entry point. -->
+    <Compile Include="../src/Time.fs" />
     <Compile Include="../src/Config.fs" />
     <Compile Include="../src/State.fs" />
     <Compile Include="../src/Stops.fs" />
@@ -13,6 +14,7 @@
     <Compile Include="../src/Ui.fs" />
     <Compile Include="../src/App.fs" />
     <Compile Include="Fixtures.fs" />
+    <Compile Include="Time.test.fs" />
     <Compile Include="App.test.fs" />
     <Compile Include="Feed.test.fs" />
     <Compile Include="Bundle.test.fs" />

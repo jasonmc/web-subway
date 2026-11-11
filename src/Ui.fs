@@ -10,6 +10,7 @@ open Config
 open State
 open Stops
 open Feed
+open Time
 
 let syncStopParam (stopPrefix: string) : unit =
     try window.history.replaceState(null, "", $"#{stopPrefix}")
@@ -61,7 +62,7 @@ let private renderArrivals (model: Model) (dispatch: Dispatch<Msg>) (arrivals: A
                     |> Array.mapi (fun i a ->
                         let rel = formatRelative a.time
                         let hw = headway a (Array.tryItem (i + 1) visible)
-                        let t = a.time.ToString("h:mm tt")
+                        let t = formatNewYorkTime a.time
                         let matchedTrain = a.tripId |> Option.bind (fun tid -> Map.tryFind tid trainByTrip)
                         let isSpotlight =
                             match a.tripId, model.spotlightTripId with
@@ -338,7 +339,7 @@ let view (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
         | FeedAge tsOpt ->
             let age =
                 match tsOpt with
-                | Some ms when ms <> 0.0 -> formatAge (createDateMs ms)
+                | Some ms when ms <> 0.0<milliseconds> -> formatAge (instantFromMilliseconds ms)
                 | _ -> "unknown"
             $"Feed age: {age}", false
 

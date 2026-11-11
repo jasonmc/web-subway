@@ -6,6 +6,7 @@ open Fable.Core
 open Fable.Core.JsInterop
 open Vitest
 open Tests.Fixtures
+open Time
 
 Vitest.beforeEach(fun () -> resetBrowser "")
 
@@ -25,24 +26,25 @@ Vitest.test("renders arrivals, updates countdowns, and refreshes after a failed 
     let lists = document.querySelector "#lists"
     Vitest.expect(lists).toHaveTextContent "in 2 min"
     Vitest.expect(lists).toHaveTextContent "next in 3m"
+    Vitest.expect(RTL.screen.getByText "7:02 AM").toBeInTheDocument()
     Vitest.expect(stationSelect()).toHaveValue "G26"
     Vitest.expect(stationSelect()).toHaveDisplayValue "Greenpoint Av"
     Vitest.expect(window.location.hash).toBe "#G26"
     Vitest.expect(RTL.screen.getByRole "status").toHaveTextContent "Feed age:"
 
-    vi.setSystemTime(Feed.createDateMs(fixedNowMs + 60000.0))
-    do! advance 1000
+    vi.setSystemTime((instantFromMilliseconds(fixedNowMs + 60000.0<milliseconds>)).UtcDateTime)
+    do! advance 1000<milliseconds>
     do! RTL.waitFor(fun () -> Vitest.expect(lists).toHaveTextContent "<1 min")
     let arrivalTimes () =
         let times = lists.querySelectorAll ".time"
         [| for index in 0 .. times.length - 1 -> times.item(index).textContent |]
     let beforeFailure = arrivalTimes()
     failNext <- true
-    do! advance 4000
+    do! advance 4000<milliseconds>
     do! RTL.waitFor(fun () -> Vitest.expect(fetch).toHaveBeenCalledTimes 2)
     do! RTL.waitFor(fun () -> Vitest.expect(document.querySelector "#status.error").toHaveTextContent "500")
     Vitest.expect(arrivalTimes()).toEqual beforeFailure
-    do! advance 5000
+    do! advance 5000<milliseconds>
     do! RTL.waitFor(fun () -> Vitest.expect(fetch).toHaveBeenCalledTimes 3)
 })
 
@@ -95,8 +97,8 @@ Vitest.test("a station link takes priority over device location", fun () -> prom
 
 Vitest.test("manual selection takes priority over a pending location request", fun () -> promise {
     let fetch = mockFeed(encode [|
-        trip "north" "north" 0 [| call "G26N" 120.0; call "G24N" 300.0 |]
-        trip "south" "south" 1 [| call "G26S" 420.0 |]
+        trip "north" "north" 0 [| call "G26N" 120.0<seconds>; call "G24N" 300.0<seconds> |]
+        trip "south" "south" 1 [| call "G26S" 420.0<seconds> |]
     |])
     let mutable locate: GeoSuccess option = None
     mockLocation(Some(fun success _ _ -> locate <- Some success))
@@ -148,7 +150,7 @@ Vitest.test("renders active trains, moves them along the track, and selects map 
     let stop = document.querySelector "[data-stop-id='G29']"
     Vitest.expect(stop.getAttribute "style").toMatch(Text.RegularExpressions.Regex "left:.*%;.*top:.*%")
 
-    do! advance 30000
+    do! advance 30000<milliseconds>
     do! RTL.waitFor(fun () -> Vitest.expect(float (north.getAttribute "data-lat")).toBeGreaterThan latitudeBefore)
     RTL.fireEvent.click (unbox stop)
     do! RTL.waitFor(fun () -> Vitest.expect(stationSelect()).toHaveValue "G29")

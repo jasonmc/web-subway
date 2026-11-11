@@ -44,6 +44,8 @@ Tests follow Feliz's Vitest and React Testing Library setup, using the published
 
 `src/App.fs` holds the app's initialization and update functions; `src/Main.fs` is the browser entry point. The test project shares the app source files while excluding that entry point, so importing the code does not start a second app.
 
+`src/Time.fs` defines seconds and milliseconds as F# units of measure. Feed timestamps, train interpolation, and timer intervals retain these units internally, with explicit conversions at protobuf and JavaScript boundaries. Arrivals are UTC `DateTimeOffset` instants; countdowns and headways use elapsed `TimeSpan` values. Clock times are formatted with the browser's built-in `Intl.DateTimeFormat` in `America/New_York`, including daylight-saving changes, regardless of the device's timezone. `Time.test.fs` covers UTC construction, New York display, and elapsed time across DST transitions.
+
 ## GitHub Pages
 
 The workflow in `.github/workflows/pages.yml` tests and builds the site with the locked Nix flake, then deploys it to GitHub Pages on every push to `master`. It can also be started manually from the Actions tab. Nix generates the map SVG and supplies Node, .NET, and Fable, so the runner needs no separate npm or .NET setup.

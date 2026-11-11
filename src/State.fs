@@ -1,11 +1,12 @@
 module State
 
 open System
+open Time
 
 type Direction = Northbound | Southbound | Other
 
 type Arrival = {
-    time: DateTime
+    time: DateTimeOffset
     route: string
     direction: Direction
     tripId: string option
@@ -18,7 +19,7 @@ type ArrivalGroup = {
     Other: Arrival array
 }
 
-type FeedMeta = { headerTimestampMs: float option }
+type FeedMeta = { headerTimestampMs: float<milliseconds> option }
 
 type StopOption = {
     id: string
@@ -29,8 +30,8 @@ type StopOption = {
 
 type TrainStopCall = {
     stopId: string
-    arriveSec: float
-    departSec: float
+    arriveSec: float<seconds>
+    departSec: float<seconds>
 }
 
 type RawTrainTrip = {
@@ -52,7 +53,7 @@ type EstimatedTrain = {
 
 type StatusDisplay =
     | Loading
-    | FeedAge of headerTimestampMs: float option
+    | FeedAge of headerTimestampMs: float<milliseconds> option
     | ErrorMessage of string
 
 // Immutable Elmish Model
@@ -67,10 +68,10 @@ type Model = {
     availableStops: Set<string> option
     lastArrivals: ArrivalGroup option
     lastFeedMeta: FeedMeta option
-    lastFeedTimestampMs: float option
+    lastFeedTimestampMs: float<milliseconds> option
     lastVisibleTotal: int
     rawTrips: RawTrainTrip array
-    spinePosByTrip: Map<string, float * float>
+    spinePosByTrip: Map<string, float * float<seconds>>
     mapTrains: EstimatedTrain array
     userLocation: (float * float) option
     spotlightTripId: string option

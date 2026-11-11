@@ -5,6 +5,7 @@ open Fable.Core
 open Fable.Core.JsInterop
 open Vitest
 open Tests.Fixtures
+open Time
 
 [<Import("readFileSync", "node:fs")>]
 let private readFile (path: string) (encoding: string) : string = jsNative
@@ -27,9 +28,9 @@ Vitest.test("the standalone production HTML boots and renders arrivals", fun () 
         "url" ==> "https://example.com/#G26"
         "runScripts" ==> "outside-only"
     ])
-    let now = JS.Constructors.Date.now() / 1000.0
+    let now = nowMilliseconds() |> millisecondsToSeconds
     let buffer = encodeAt now [|
-        trip "smoke" "smoke" 0 [| {| stopId = "G26N"; arrival = {| time = now + 120.0 |} |} |]
+        trip "smoke" "smoke" 0 [| {| stopId = "G26N"; arrival = {| time = float (now + 120.0<seconds>) |} |} |]
     |]
     let fetch = vi.fn(fun (_: string) -> JS.Constructors.Promise.resolve(response buffer 200))
     // Only this smoke test needs an isolated page. The behavioral tests use RTL.

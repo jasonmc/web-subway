@@ -5,6 +5,7 @@ open Vitest
 open State
 open Feed
 open Tests.Fixtures
+open Time
 
 Vitest.beforeEach(fun () -> resetBrowser "")
 
@@ -13,8 +14,9 @@ Vitest.test("decodes a protobuf feed and groups only the selected station's arri
     Vitest.expect(arrivals.Northbound.Length).toBe 2
     Vitest.expect(arrivals.Southbound.Length).toBe 1
     Vitest.expect(arrivals.Other.Length).toBe 0
-    Vitest.expect(arrivals.Northbound[0].time).toEqual(createDateMs(fixedNowMs + 120000.0))
-    Vitest.expect(arrivals.Northbound[1].time).toEqual(createDateMs(fixedNowMs + 300000.0))
+    Vitest.expect(arrivals.Northbound[0].time).toEqual(instantFromMilliseconds(fixedNowMs + 120000.0<milliseconds>))
+    Vitest.expect(arrivals.Northbound[1].time).toEqual(instantFromMilliseconds(fixedNowMs + 300000.0<milliseconds>))
+    Vitest.expect(arrivals.Northbound[0].time.Offset).toEqual TimeSpan.Zero
     Vitest.expect(meta.headerTimestampMs).toEqual(Some fixedNowMs))
 
 Vitest.test("uses stop and trip directions when directionId disagrees", fun () ->
@@ -33,33 +35,42 @@ Vitest.test("interpolates between stations and keeps a moving train progressing 
     let north = initial |> Array.find (fun train -> train.tripId = "G-N-1")
     Vitest.expect(north.latitude).toBeGreaterThan 40.724635
     Vitest.expect(north.latitude).toBeLessThan 40.731352
-    let later, _ = estimateTrainPositions (fixedNowSec + 30.0) lookup positions trips
+    let later, _ = estimateTrainPositions (fixedNowSec + 30.0<seconds>) lookup positions trips
     let moved = later |> Array.find (fun train -> train.tripId = north.tripId)
     Vitest.expect(moved.latitude).toBeGreaterThan north.latitude
     Vitest.expect(moved.spinePos).toBeGreaterThan north.spinePos)
 
 for seconds, expected in [
-    -1.0, "due"
-    0.0, "due"
-    0.001, "<1 min"
-    30.0, "<1 min"
-    50.0, "<1 min"
-    59.999, "<1 min"
-    60.0, "in 1 min"
-    90.0, "in 1 min"
-    119.999, "in 1 min"
-    120.0, "in 2 min"
-    3599.999, "in 59 min"
-    3600.0, "in 1h"
-    3659.999, "in 1h"
-    3660.0, "in 1h 1m"
+    -1.0<seconds>, "due"
+    0.0<seconds>, "due"
+    0.001<seconds>, "<1 min"
+    30.0<seconds>, "<1 min"
+    50.0<seconds>, "<1 min"
+    59.999<seconds>, "<1 min"
+    60.0<seconds>, "in 1 min"
+    90.0<seconds>, "in 1 min"
+    119.999<seconds>, "in 1 min"
+    120.0<seconds>, "in 2 min"
+    3599.999<seconds>, "in 59 min"
+    3600.0<seconds>, "in 1h"
+    3659.999<seconds>, "in 1h"
+    3660.0<seconds>, "in 1h 1m"
 ] do
     Vitest.test($"formats an arrival {seconds} seconds away as {expected}", fun () ->
-        Vitest.expect(formatRelative (createDateMs(fixedNowMs + seconds * 1000.0))).toBe expected)
+        Vitest.expect(formatRelative (instantFromMilliseconds(fixedNowMs + secondsToMilliseconds seconds))).toBe expected)
+
+Vitest.test("converts feed seconds to JavaScript milliseconds", fun () ->
+    Vitest.expect(secondsToMilliseconds 1.25<seconds>).toEqual 1250.0<milliseconds>)
+
+Vitest.test("converts JavaScript milliseconds to feed seconds", fun () ->
+    Vitest.expect(millisecondsToSeconds 2500.0<milliseconds>).toEqual 2.5<seconds>)
+
+Vitest.test("uses the JavaScript clock in seconds for train estimation", fun () ->
+    Vitest.expect(effectiveNowSec (Some fixedNowMs)).toEqual fixedNowSec)
 
 Vitest.test("omits nonpositive headways", fun () ->
     let arrival: Arrival = {
-        time = createDateMs fixedNowMs
+        time = instantFromMilliseconds fixedNowMs
         route = "G"
         direction = Northbound
         tripId = Some "one"

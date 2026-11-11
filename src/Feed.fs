@@ -4,6 +4,7 @@ open System
 open Fable.Core
 open Config
 open State
+open Time
 
 let MAP_WIDTH = 440.0
 let MAP_HEIGHT = 510.0
@@ -35,7 +36,7 @@ let projectToMapPercent (lat: float) (lon: float) : string * string =
 [<ImportDefault("../g_corridor.svg?raw")>]
 let STATIC_BASE_SVG: string = jsNative
 
-let private clamp (lo: float) (hi: float) (v: float) =
+let private clamp (lo: float<'u>) (hi: float<'u>) (v: float<'u>) =
     max lo (min hi v)
 
 // Parse consecutive ((x0, y0, s0), (x1, y1, s1)) segments from <path class="osm-track-line" d="..."/> in g_corridor.svg
@@ -113,21 +114,21 @@ type IGtfsModule = abstract transit_realtime: ITransitRealtime
 [<ImportAll("gtfs-realtime-bindings")>]
 let private gtfs: IGtfsModule = jsNative
 
-let createDateMs (ms: float) : DateTime =
-    JS.Constructors.Date.Create(ms)
-
 let private roundInt (value: float) : int =
     int (Math.Round(value, MidpointRounding.AwayFromZero))
 
 let decodeFeed (buf: JS.ArrayBuffer) : IFeedMessage =
     gtfs.transit_realtime.FeedMessage.decode(JS.Constructors.Uint8Array.Create(buf))
 
-// Coerce protobuf Long/number/undefined to positive epoch seconds.
+// Coerce protobuf Long/number/undefined to a number at the external boundary.
 [<Emit("(typeof $0 === 'number' ? $0 : typeof $0 === 'bigint' ? Number($0) : ($0 && typeof $0 === 'object' && 'toNumber' in $0 ? (() => { try { return $0.toNumber(); } catch { return undefined; } })() : undefined))")>]
 let private toInt (value: obj option) : float option = jsNative
 
-let private (|EventTime|_|) (ev: IStopTimeEvent option) : float option =
-    ev |> Option.bind (fun e -> toInt e.time) |> Option.filter ((<>) 0.0)
+let private toSeconds (value: obj option) : float<seconds> option =
+    toInt value |> Option.map LanguagePrimitives.FloatWithMeasure<seconds>
+
+let private (|EventTime|_|) (ev: IStopTimeEvent option) : float<seconds> option =
+    ev |> Option.bind (fun e -> toSeconds e.time) |> Option.filter ((<>) 0.0<seconds>)
 
 let stopsInFeed (feed: IFeedMessage) : Set<string> =
     [| for entity in feed.entity do
@@ -155,12 +156,12 @@ let private smoothProgress (rawP: float) : float =
     0.58 * t + 0.42 * (t * t * (3.0 - 2.0 * t))
 
 // Snap wall clock into the feed's clock frame if MTA has a DST/timezone offset (> 25 min skew)
-let effectiveNowSec (headerTimestampMs: float option) : float =
-    let wallSec = JS.Constructors.Date.now() / 1000.0
+let effectiveNowSec (headerTimestampMs: float<milliseconds> option) : float<seconds> =
+    let wallSec = nowMilliseconds() |> millisecondsToSeconds
     match headerTimestampMs with
-    | Some ms when ms > 0.0 ->
-        let diff = ms / 1000.0 - wallSec
-        if Math.Abs(diff) > 1500.0 then wallSec + Math.Round(diff / 1800.0) * 1800.0
+    | Some ms when ms > 0.0<milliseconds> ->
+        let diff = millisecondsToSeconds ms - wallSec
+        if abs diff > 1500.0<seconds> then wallSec + Math.Round(diff / 1800.0<seconds>) * 1800.0<seconds>
         else wallSec
     | _ -> wallSec
 
@@ -168,9 +169,9 @@ let effectiveNowSec (headerTimestampMs: float option) : float =
 let extractRawTrips (feed: IFeedMessage) : RawTrainTrip array =
     let headerMs =
         feed.header
-        |> Option.bind (fun h -> toInt h.timestamp)
-        |> Option.filter ((<>) 0.0)
-        |> Option.map ((*) 1000.0)
+        |> Option.bind (fun h -> toSeconds h.timestamp)
+        |> Option.filter ((<>) 0.0<seconds>)
+        |> Option.map secondsToMilliseconds
     let nowSec = effectiveNowSec headerMs
 
     let vehiclesByTrip =
@@ -180,7 +181,7 @@ let extractRawTrips (feed: IFeedMessage) : RawTrainTrip array =
                    match v.trip |> Option.bind _.tripId with
                    | Some tid when tid <> "" ->
                        let rawStopOpt = v.stopId |> Option.filter ((<>) "")
-                       let tsOpt = toInt v.timestamp |> Option.filter ((<>) 0.0)
+                       let tsOpt = toSeconds v.timestamp |> Option.filter ((<>) 0.0<seconds>)
                        let seqOpt = toInt v.currentStopSequence |> Option.map int
                        tid, (rawStopOpt, tsOpt, seqOpt)
                    | _ -> ()
@@ -223,7 +224,7 @@ let extractRawTrips (feed: IFeedMessage) : RawTrainTrip array =
                           let arrOpt = match stu.arrival with EventTime t -> Some t | _ -> None
                           let depOpt = match stu.departure with EventTime t -> Some t | _ -> None
                           match arrOpt <|> depOpt with
-                          | Some primarySec when primarySec >= nowSec - 300.0 ->
+                          | Some primarySec when primarySec >= nowSec - 300.0<seconds> ->
                               let arrSec = arrOpt |? primarySec
                               let depSec = depOpt |? arrSec
                               { stopId = cleanId; arriveSec = arrSec; departSec = max arrSec depSec }
@@ -242,7 +243,7 @@ let extractRawTrips (feed: IFeedMessage) : RawTrainTrip array =
                    match rawVehStopOpt |> Option.map (fun s -> STOP_SUFFIX_RE.Replace(s, "")), vehTsOpt with
                    | Some vStop, Some vTs
                        when stuCalls.Length > 0
-                            && vTs >= nowSec - 300.0 && vTs <= nowSec + 5.0
+                            && vTs >= nowSec - 300.0<seconds> && vTs <= nowSec + 5.0<seconds>
                             && vTs < stuCalls[0].arriveSec
                             && stuCalls |> Array.forall (fun c -> c.stopId <> vStop) ->
                        let vIdx = spineIndexByStop |> Map.tryFind vStop |? -1
@@ -257,11 +258,11 @@ let extractRawTrips (feed: IFeedMessage) : RawTrainTrip array =
                    | _ -> stuCalls
 
                let isUnstarted =
-                   (vehSeqOpt = Some 0 && calls.Length > 0 && calls[0].arriveSec > nowSec + 45.0)
-                   || (calls.Length >= 2 && calls[0].arriveSec > nowSec + 60.0
+                   (vehSeqOpt = Some 0 && calls.Length > 0 && calls[0].arriveSec > nowSec + 45.0<seconds>)
+                   || (calls.Length >= 2 && calls[0].arriveSec > nowSec + 60.0<seconds>
                        && ((dir = Southbound && calls[0].stopId = "G22") || (dir = Northbound && calls[0].stopId = "F27")))
 
-               if calls.Length > 0 && not isUnstarted && (calls |> Array.exists (fun c -> c.departSec >= nowSec - 10.0)) then
+               if calls.Length > 0 && not isUnstarted && (calls |> Array.exists (fun c -> c.departSec >= nowSec - 10.0<seconds>)) then
                    { tripId = tripId; direction = dir; calls = calls } |]
     |> Array.sortBy _.tripId
 
@@ -290,11 +291,11 @@ let private poseAtSpinePos (stopLookup: Map<string, StopOption>) (direction: Dir
 // Estimate each active train's live (latitude, longitude, heading) along the G-line track spine
 // with monotonic, velocity-bounded smoothing so markers never jump backwards or teleport ahead.
 let estimateTrainPositions
-    (nowSec: float)
+    (nowSec: float<seconds>)
     (stopLookup: Map<string, StopOption>)
-    (prevPositions: Map<string, float * float>)
+    (prevPositions: Map<string, float * float<seconds>>)
     (trips: RawTrainTrip array)
-    : EstimatedTrain array * Map<string, float * float> =
+    : EstimatedTrain array * Map<string, float * float<seconds>> =
 
     let stepped =
         trips
@@ -310,13 +311,13 @@ let estimateTrainPositions
 
             // Account for ~15s station dwell time when MTA reports identical arrival & departure timestamps
             let effectiveDepart (idx: int) (c: TrainStopCall) =
-                if c.departSec > c.arriveSec + 1.0 then c.departSec
+                if c.departSec > c.arriveSec + 1.0<seconds> then c.departSec
                 elif idx + 1 < distinctCalls.Length then
-                    c.departSec + clamp 0.0 15.0 ((distinctCalls[idx + 1].arriveSec - c.departSec - 30.0) * 0.25)
-                else c.departSec + 10.0
+                    c.departSec + clamp 0.0<seconds> 15.0<seconds> ((distinctCalls[idx + 1].arriveSec - c.departSec - 30.0<seconds>) * 0.25)
+                else c.departSec + 10.0<seconds>
 
             distinctCalls
-            |> Array.tryFindIndex (fun c -> c.departSec >= nowSec - 5.0)
+            |> Array.tryFindIndex (fun c -> c.departSec >= nowSec - 5.0<seconds>)
             |> Option.bind (fun nextIdx ->
                 let nextCall = distinctCalls[nextIdx]
                 let nextSpineIdx = spineIndexByStop |> Map.tryFind nextCall.stopId |? 0
@@ -324,7 +325,7 @@ let estimateTrainPositions
 
                 // PREFERRED_STOP_ORDER runs South (F27 = 0) to North (G22 = 20)
                 let targetSpinePosOpt =
-                    if remSec <= 8.0 then
+                    if remSec <= 8.0<seconds> then
                         Some (float nextSpineIdx)
                     elif nextIdx > 0 then
                         let prevCall = distinctCalls[nextIdx - 1]
@@ -332,7 +333,7 @@ let estimateTrainPositions
                         let effDepSec = effectiveDepart (nextIdx - 1) prevCall
                         if nowSec <= effDepSec then Some (float prevSpineIdx)
                         else
-                            let p = clamp 0.02 0.98 (smoothProgress ((nowSec - effDepSec) / max 25.0 (nextCall.arriveSec - effDepSec)))
+                            let p = clamp 0.02 0.98 (smoothProgress ((nowSec - effDepSec) / max 25.0<seconds> (nextCall.arriveSec - effDepSec)))
                             Some (float prevSpineIdx + (float nextSpineIdx - float prevSpineIdx) * p)
                     else
                         let upstreamSpineIdx =
@@ -340,8 +341,8 @@ let estimateTrainPositions
                             | Northbound -> max 0 (nextSpineIdx - 1)
                             | Southbound -> min (PREFERRED_STOP_ORDER.Length - 1) (nextSpineIdx + 1)
                             | Other -> nextSpineIdx
-                        if upstreamSpineIdx <> nextSpineIdx && remSec <= 150.0 then
-                            let p = clamp 0.03 0.98 (smoothProgress (1.0 - remSec / max remSec 95.0))
+                        if upstreamSpineIdx <> nextSpineIdx && remSec <= 150.0<seconds> then
+                            let p = clamp 0.03 0.98 (smoothProgress (1.0 - remSec / max remSec 95.0<seconds>))
                             Some (float upstreamSpineIdx + (float nextSpineIdx - float upstreamSpineIdx) * p)
                         elif upstreamSpineIdx = nextSpineIdx then Some (float nextSpineIdx)
                         else None
@@ -352,13 +353,13 @@ let estimateTrainPositions
                         match Map.tryFind trip.tripId prevPositions with
                         | None -> targetSpinePos
                         | Some (prevSpinePos, prevTimeSec) ->
-                            let dt = clamp 0.0 60.0 (nowSec - prevTimeSec)
+                            let dt = clamp 0.0<seconds> 60.0<seconds> (nowSec - prevTimeSec)
                             let dirSign = if trip.direction = Southbound then -1.0 else 1.0
                             let signedDelta = (targetSpinePos - prevSpinePos) * dirSign
                             if signedDelta < -1.8 || signedDelta > 2.5 then targetSpinePos
                             elif signedDelta <= 0.0 then prevSpinePos
                             else
-                                let maxStep = dt * min 0.032 (0.013 + 0.025 * signedDelta)
+                                let maxStep = dt * min 0.032<1/seconds> (0.013<1/seconds> + 0.025<1/seconds> * signedDelta)
                                 prevSpinePos + dirSign * min signedDelta maxStep
 
                     let isStopped = Math.Abs(spinePos - Math.Round(spinePos)) < 0.02
@@ -382,8 +383,8 @@ let private formatHoursMinutes (m: int) (suffix: string) =
     | h, 0 -> $"{h}h{suffix}"
     | h, min -> $"{h}h {min}m{suffix}"
 
-let formatRelative (target: DateTime) : string =
-    let remaining = target - DateTime.Now
+let formatRelative (target: DateTimeOffset) : string =
+    let remaining = target - DateTimeOffset.UtcNow
     if remaining.TotalSeconds <= 0.0 then "due"
     elif remaining.TotalMinutes < 1.0 then "<1 min"
     else
@@ -391,8 +392,8 @@ let formatRelative (target: DateTime) : string =
         | m when m < 60 -> $"in {m} min"
         | m -> "in " + formatHoursMinutes m ""
 
-let formatAge (target: DateTime) : string =
-    match roundInt (DateTime.Now - target).TotalSeconds with
+let formatAge (target: DateTimeOffset) : string =
+    match roundInt (DateTimeOffset.UtcNow - target).TotalSeconds with
     | s when s <= 0 -> "just now"
     | s when s < 60 -> $"{s}s ago"
     | s ->
@@ -410,12 +411,12 @@ let headway (current: Arrival) (next: Arrival option) : string =
     | None -> ""
 
 let parseFeed (feed: IFeedMessage) (stopIdPrefix: string) : ArrivalGroup * FeedMeta =
-    let currentNow = DateTime.Now
+    let currentNow = DateTimeOffset.UtcNow
     let headerTimestampMs =
         feed.header
-        |> Option.bind (fun h -> toInt h.timestamp)
-        |> Option.filter ((<>) 0.0)
-        |> Option.map ((*) 1000.0)
+        |> Option.bind (fun h -> toSeconds h.timestamp)
+        |> Option.filter ((<>) 0.0<seconds>)
+        |> Option.map secondsToMilliseconds
 
     let allArrivals =
         [| for idx, entity in Array.indexed feed.entity do
@@ -438,7 +439,7 @@ let parseFeed (feed: IFeedMessage) (stopIdPrefix: string) : ArrivalGroup * FeedM
                        | Some stopId when stopId.StartsWith(stopIdPrefix) ->
                            match stu.arrival, stu.departure with
                            | EventTime ts, _ | _, EventTime ts ->
-                               let whenDate = createDateMs (ts * 1000.0)
+                               let whenDate = instantFromSeconds ts
                                if whenDate >= currentNow then
                                    let dir =
                                        if stopId.EndsWith("N") then Northbound

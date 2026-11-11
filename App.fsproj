@@ -3,6 +3,7 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="src/Time.fs" />
     <Compile Include="src/Config.fs" />
     <Compile Include="src/State.fs" />
     <Compile Include="src/Stops.fs" />
