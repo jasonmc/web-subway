@@ -43,6 +43,53 @@ Vitest.test (
 )
 
 Vitest.test (
+    "takes each trip's destination from its final stop, including short turns and reroutes",
+    fun () ->
+        let feed =
+            encode
+                [| trip "normal" "normal" 0 [| call "G26N" 120.0<seconds>; call "G22N" 360.0<seconds> |]
+                   trip "short" "short" 0 [| call "G26N" 180.0<seconds>; call "G24N" 300.0<seconds> |]
+                   trip "reroute" "reroute" 1 [| call "G26S" 240.0<seconds>; call "A42S" 900.0<seconds> |] |]
+            |> decodeFeed
+
+        let arrivals, _ = parseFeed feed "G26"
+        Vitest.expect(arrivals.Northbound |> Array.map _.destinationStopId).toEqual [| Some "G22"; Some "G24" |]
+        Vitest.expect(arrivals.Southbound[0].destinationStopId).toEqual (Some "A42")
+)
+
+Vitest.test (
+    "uses terminal stops without predictions and ignores skipped or empty trailing stops",
+    fun () ->
+        let feed =
+            encode
+                [| trip "untimed" "untimed" 0 [| box (call "G26N" 120.0<seconds>); box {| stopId = "G22N" |} |]
+                   trip
+                       "skipped"
+                       "skipped"
+                       0
+                       [| box (call "G26N" 180.0<seconds>)
+                          box (call "G24N" 300.0<seconds>)
+                          box
+                              {| stopId = "G22N"
+                                 scheduleRelationship = 1 |}
+                          box {| stopId = "" |} |]
+                   trip
+                       "no-pickup"
+                       "no-pickup"
+                       0
+                       [| box
+                              {| stopId = "G26N"
+                                 scheduleRelationship = 1
+                                 arrival = {| time = float (fixedNowSec + 240.0<seconds>) |} |}
+                          box (call "G22N" 420.0<seconds>) |] |]
+            |> decodeFeed
+
+        let arrivals, _ = parseFeed feed "G26"
+        Vitest.expect(arrivals.Northbound.Length).toBe 2
+        Vitest.expect(arrivals.Northbound |> Array.map _.destinationStopId).toEqual [| Some "G22"; Some "G24" |]
+)
+
+Vitest.test (
     "interpolates between stations and keeps a moving train progressing forward",
     fun () ->
         let _, lookup, _, _, _ = Stops.initStops ()
@@ -105,7 +152,7 @@ Vitest.test (
               route = "G"
               direction = Northbound
               tripId = Some "one"
-              label = None }
+              destinationStopId = None }
 
         Vitest.expect(headway arrival (Some arrival)).toBe ""
 

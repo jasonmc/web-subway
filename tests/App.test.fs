@@ -11,6 +11,42 @@ open Time
 Vitest.beforeEach (fun () -> resetBrowser "")
 
 Vitest.test (
+    "shows destination headings and separates short-turn trains in the same direction",
+    fun () ->
+        promise {
+            let buffer =
+                encode
+                    [| trip "north-1" "north-1" 0 [| call "G26N" 120.0<seconds>; call "G22N" 360.0<seconds> |]
+                       trip "short" "short" 0 [| call "G26N" 180.0<seconds>; call "G24N" 300.0<seconds> |]
+                       trip "north-2" "north-2" 0 [| call "G26N" 240.0<seconds>; call "G22N" 480.0<seconds> |]
+                       trip "south" "south" 1 [| call "G26S" 420.0<seconds>; call "F27S" 1800.0<seconds> |] |]
+
+            mockFeed buffer |> ignore
+            renderApp () |> ignore
+            do! waitForArrivals ()
+
+            let court =
+                RTL.screen.getByRole ("heading", ByRoleOptions(name = Text "Northbound to Court Sq"))
+
+            let short =
+                RTL.screen.getByRole ("heading", ByRoleOptions(name = Text "Northbound to 21 St"))
+
+            let church =
+                RTL.screen.getByRole ("heading", ByRoleOptions(name = Text "Southbound to Church Av"))
+
+            Vitest.expect(court.textContent).toBe "Court Sq"
+            Vitest.expect(short.textContent).toBe "21 St"
+            Vitest.expect(church.textContent).toBe "Church Av"
+            Vitest.expect(court.closest(".card").Value.querySelectorAll(".arrival").length).toBe 2
+            Vitest.expect(short.closest(".card").Value.querySelectorAll(".arrival").length).toBe 1
+
+            Vitest
+                .expect(short.closest(".card").Value.querySelector (".arrival"))
+                .toHaveAttribute ("data-trip-id", "short")
+        }
+)
+
+Vitest.test (
     "switches mobile views without resetting the station or fetching again",
     fun () ->
         promise {
@@ -76,7 +112,12 @@ Vitest.test (
             do! waitForArrivals ()
 
             Vitest.expect(fetch).toHaveBeenCalledTimes 1
-            Vitest.expect(RTL.screen.getByText "Southbound").toBeInTheDocument ()
+
+            Vitest
+                .expect(RTL.screen.getByRole ("heading", ByRoleOptions(name = Text "Southbound to Greenpoint Av")))
+                .toHaveTextContent
+                "Greenpoint Av"
+
             let lists = document.querySelector "#lists"
             Vitest.expect(lists).toHaveTextContent "in 2 min"
             Vitest.expect(lists).toHaveTextContent "next in 3m"

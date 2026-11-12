@@ -14,7 +14,7 @@ type Arrival =
       route: string
       direction: Direction
       tripId: string option
-      label: string option }
+      destinationStopId: string option }
 
 type ArrivalGroup =
     { Northbound: Arrival array

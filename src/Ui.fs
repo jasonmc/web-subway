@@ -60,14 +60,27 @@ let private renderArrivals (model: Model) (dispatch: Dispatch<Msg>) (arrivals: A
     let trainByTrip = model.mapTrains |> Array.map (fun t -> t.tripId, t) |> Map.ofArray
 
     let cards =
-        [ "Northbound", "M12 20 V4 M5 11 L12 4 L19 11", arrivals.Northbound
-          "Southbound", "M12 4 V20 M5 13 L12 20 L19 13", arrivals.Southbound
-          "Other", "M5 5 H19 V19 H5 Z", arrivals.Other ]
+        [ Northbound, "M12 20 V4 M5 11 L12 4 L19 11", arrivals.Northbound
+          Southbound, "M12 4 V20 M5 13 L12 20 L19 13", arrivals.Southbound
+          Other, "M5 5 H19 V19 H5 Z", arrivals.Other ]
+        |> List.collect (fun (direction, icon, items) ->
+            items
+            |> Array.truncate ARRIVALS_PER_DIRECTION
+            |> Array.groupBy _.destinationStopId
+            |> Array.map (fun (destination, trains) -> direction, icon, destination, trains)
+            |> Array.toList)
 
     let renderedCards =
         cards
-        |> List.choose (fun (title, icon, items) ->
-            match Array.truncate ARRIVALS_PER_DIRECTION items with
+        |> List.choose (fun (direction, icon, destination, items) ->
+            let title =
+                destination |> Option.map (stopLabel model.stopLookup)
+                |? "Destination unavailable"
+
+            let destinationKey = destination |? "unknown"
+            let cardKey = $"{direction}-{destinationKey}"
+
+            match items with
             | [||] -> None
             | visible ->
                 let rows =
@@ -91,7 +104,7 @@ let private renderArrivals (model: Model) (dispatch: Dispatch<Msg>) (arrivals: A
                             + (if isSpotlight then " is-spotlight" else "")
 
                         Html.div
-                            [ prop.key (a.tripId |? $"{title}-{i}")
+                            [ prop.key (a.tripId |? $"{cardKey}-{i}")
                               prop.className cls
                               match a.tripId with
                               | Some tid ->
@@ -117,13 +130,14 @@ let private renderArrivals (model: Model) (dispatch: Dispatch<Msg>) (arrivals: A
 
                 Some(
                     Bulma.card
-                        [ prop.key title
+                        [ prop.key cardKey
                           prop.children
                               [ Bulma.cardContent
                                     [ prop.children
                                           [ Bulma.title.h2
                                                 [ Feliz.Bulma.title.is5
                                                   prop.className "mb-3"
+                                                  prop.ariaLabel $"{direction} to {title}"
                                                   prop.children
                                                       [ Svg.svg
                                                             [ svg.className "direction-icon"

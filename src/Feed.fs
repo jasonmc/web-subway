@@ -116,6 +116,7 @@ type IStopTimeEvent =
 
 type IStopTimeUpdate =
     abstract stopId: string option
+    abstract scheduleRelationship: obj option
     abstract arrival: IStopTimeEvent option
     abstract departure: IStopTimeEvent option
 
@@ -565,9 +566,22 @@ let parseFeed (feed: IFeedMessage) (stopIdPrefix: string) : ArrivalGroup * FeedM
                        | Some 1.0 -> Southbound
                        | _ -> Other
 
+                   // MTA includes the remaining stops in trip order. The last
+                   // served stop is the destination, including short turns.
+                   let destination =
+                       (tu.stopTimeUpdate |? [||])
+                       |> Array.rev
+                       |> Array.tryPick (fun stop ->
+                           if toInt stop.scheduleRelationship = Some 1.0 then
+                               None // SKIPPED
+                           else
+                               stop.stopId
+                               |> Option.filter (not << String.IsNullOrWhiteSpace)
+                               |> Option.map (fun id -> STOP_SUFFIX_RE.Replace(id, "")))
+
                    for stu in (tu.stopTimeUpdate |? [||]) do
                        match stu.stopId with
-                       | Some stopId when stopId.StartsWith(stopIdPrefix) ->
+                       | Some stopId when stopId.StartsWith(stopIdPrefix) && toInt stu.scheduleRelationship <> Some 1.0 ->
                            match stu.arrival, stu.departure with
                            | EventTime ts, _
                            | _, EventTime ts ->
@@ -583,7 +597,7 @@ let parseFeed (feed: IFeedMessage) (stopIdPrefix: string) : ArrivalGroup * FeedM
                                      route = route
                                      direction = dir
                                      tripId = Some tripId
-                                     label = None }
+                                     destinationStopId = destination }
                            | _ -> ()
                        | _ -> () |]
         |> Array.sortBy _.time

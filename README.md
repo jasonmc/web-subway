@@ -92,7 +92,7 @@ The flake exposes:
 ## Notes
 
 - The browser fetches the public MTA feed directly using CORS and decodes it with `gtfs-realtime-bindings`.
-- The page shows the selected G train station's next 3 arrivals per direction and refreshes every 5 seconds.
+- The page shows the selected G train station's next 3 arrivals per direction and refreshes every 5 seconds. Cards show a direction arrow and the destination from each trip's final non-skipped stop in the MTA feed. Trains with different destinations get separate cards, including short turns and reroutes; station names come from the bundled stops data.
 
 ## License
 

@@ -142,7 +142,7 @@ let private TestApp () =
 let renderApp () = RTL.render (TestApp())
 
 let waitForArrivals () =
-    RTL.waitFor (fun () -> Vitest.expect(RTL.screen.getByText "Northbound").toBeInTheDocument ())
+    RTL.waitFor (fun () -> Vitest.expect(document.querySelector "#lists .arrival").toBeInTheDocument ())
 
 let advance (duration: int<milliseconds>) =
     RTL.act (fun () -> vi.advanceTimersByTimeAsync (int duration))

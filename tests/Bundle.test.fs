@@ -103,7 +103,7 @@ Vitest.test (
                     RTL.waitFor (
                         (fun () ->
                             Vitest.expect(dom.window.document.querySelector("#lists").textContent).toContain
-                                "Northbound"),
+                                "Greenpoint Av"),
                         RTLWaitForOptions(container = dom.window.document.body)
                     )
 
