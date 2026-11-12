@@ -364,6 +364,26 @@ let private renderMap (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
                                               prop.rel "noopener noreferrer"
                                               prop.text "Whong" ] ] ] ] ] ] ]
 
+let private renderViewSwitch (selected: MobileView) (dispatch: Dispatch<Msg>) =
+    Bulma.buttons
+        [ buttons.hasAddons
+          helpers.isHiddenTablet
+          prop.className "mobile-view-switch"
+          prop.role "group"
+          prop.ariaLabel "View"
+          prop.children
+              [ for view, label, panel in [ ArrivalsView, "Arrivals", "lists"; MapView, "Map", "map" ] do
+                    let isSelected = view = selected
+
+                    Bulma.button.button
+                        [ prop.type'.button
+                          if isSelected then
+                              color.isSuccess
+                          prop.ariaPressed isSelected
+                          prop.ariaControls panel
+                          prop.onClick (fun _ -> dispatch (SelectMobileView view))
+                          prop.text label ] ] ]
+
 let view (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
     let available = model.availableStops |> Option.filter (not << Set.isEmpty)
 
@@ -425,11 +445,14 @@ let view (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
                             if isError then color.isDanger else color.isInfo
                             prop.className (if isError then "status error" else "status")
                             prop.text statusText ] ] ]
+          renderViewSwitch model.mobileView dispatch
           Bulma.columns
               [ prop.className "app-content"
                 prop.children
                     [ Bulma.column
                           [ prop.className "arrivals-column"
+                            if model.mobileView = MapView then
+                                helpers.isHiddenMobile
                             prop.children
                                 [ Html.section
                                       [ prop.id "lists"
@@ -441,6 +464,8 @@ let view (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
                                         ) ] ] ]
                       Bulma.column
                           [ prop.className "map-column"
+                            if model.mobileView = ArrivalsView then
+                                helpers.isHiddenMobile
                             prop.children
                                 [ Html.section
                                       [ prop.id "map"

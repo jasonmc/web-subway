@@ -55,6 +55,10 @@ type StatusDisplay =
     | FeedAge of headerTimestampMs: float<milliseconds> option
     | ErrorMessage of string
 
+type MobileView =
+    | ArrivalsView
+    | MapView
+
 // Immutable Elmish Model
 type Model =
     { stopOptions: StopOption array
@@ -74,10 +78,12 @@ type Model =
       mapTrains: EstimatedTrain array
       userLocation: Coordinates option
       spotlightTripId: string option
+      mobileView: MobileView
       status: StatusDisplay }
 
 // Elmish Messages
 type Msg =
+    | SelectMobileView of MobileView
     | SelectStop of stopId: string
     | GeoResolved of (string * Coordinates) option
     | RefreshFeed of showLoading: bool

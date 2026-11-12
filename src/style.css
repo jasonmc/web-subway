@@ -131,7 +131,17 @@ body {
   color: var(--error-text);
 }
 
-/* Keep Bulma’s columns, with enough room for the map at tablet sizes and up. */
+.mobile-view-switch {
+  margin-bottom: 20px;
+}
+
+.mobile-view-switch .button {
+  flex: 1;
+  min-height: 44px;
+  margin-bottom: 0;
+}
+
+/* Show both columns on larger screens; choose one on phones. */
 .app-content {
   --bulma-column-gap: 0;
   gap: 16px;
@@ -145,12 +155,6 @@ body {
   .app-content > .map-column {
     flex: none;
     width: 430px;
-  }
-}
-
-@media (max-width: 768px) {
-  .map-section {
-    margin-top: 16px;
   }
 }
 

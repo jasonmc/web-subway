@@ -82,6 +82,7 @@ let init () : Model * Cmd<Msg> =
           mapTrains = [||]
           userLocation = None
           spotlightTripId = None
+          mobileView = ArrivalsView
           status = Loading }
 
     let geoCmd =
@@ -100,6 +101,8 @@ let init () : Model * Cmd<Msg> =
 // Elmish Update
 let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
     match msg with
+    | SelectMobileView view -> { model with mobileView = view }, Cmd.none
+
     | SelectStop stopId ->
         { model with
             selectedStopPrefix = stopId

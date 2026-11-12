@@ -5,11 +5,13 @@
 @use "bulma/sass/base/generic";
 @use "bulma/sass/elements/title";
 @use "bulma/sass/elements/notification";
+@use "bulma/sass/elements/button";
 @use "bulma/sass/form/select";
 @use "bulma/sass/form/tools";
 @use "bulma/sass/components/card";
 @use "bulma/sass/grid/columns";
 @use "bulma/sass/helpers/spacing";
+@use "bulma/sass/helpers/visibility";
 
 // Follow the system preference without requiring JavaScript or a saved setting.
 @use "bulma/sass/themes/light";

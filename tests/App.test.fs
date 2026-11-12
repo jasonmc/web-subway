@@ -11,6 +11,54 @@ open Time
 Vitest.beforeEach (fun () -> resetBrowser "")
 
 Vitest.test (
+    "switches mobile views without resetting the station or fetching again",
+    fun () ->
+        promise {
+            let fetch = mockFeed (trainsFeed ())
+            renderApp () |> ignore
+            do! waitForArrivals ()
+
+            let arrivals =
+                RTL.screen.getByRole ("button", ByRoleOptions(name = Text "Arrivals"))
+
+            let map = RTL.screen.getByRole ("button", ByRoleOptions(name = Text "Map"))
+            let arrivalsColumn = document.querySelector ".arrivals-column"
+            let mapColumn = document.querySelector ".map-column"
+            Vitest.expect(arrivals).toHaveAttribute ("aria-pressed", "true")
+            Vitest.expect(map).toHaveAttribute ("aria-pressed", "false")
+            Vitest.expect(mapColumn).toHaveClass "is-hidden-mobile"
+            Vitest.expect(arrivalsColumn.classList.contains "is-hidden-mobile").toBe false
+
+            Vitest.expect(RTL.screen.getByRole ("group", ByRoleOptions(name = Text "View"))).toHaveClass
+                "is-hidden-tablet"
+
+            RTL.fireEvent.click map
+            Vitest.expect(map).toHaveAttribute ("aria-pressed", "true")
+            Vitest.expect(arrivals).toHaveAttribute ("aria-pressed", "false")
+            Vitest.expect(arrivalsColumn).toHaveClass "is-hidden-mobile"
+            Vitest.expect(mapColumn.classList.contains "is-hidden-mobile").toBe false
+            Vitest.expect(fetch).toHaveBeenCalledTimes 1
+
+            // Station selection and refreshes must not switch the view back.
+            RTL.fireEvent.click (document.querySelector "[data-stop-id='G24']" :?> Browser.Types.HTMLElement)
+            do! RTL.waitFor (fun () -> Vitest.expect(stationSelect ()).toHaveValue "G24")
+            do! RTL.waitFor (fun () -> Vitest.expect(fetch).toHaveBeenCalledTimes 2)
+            do! advance 5000<milliseconds>
+            do! RTL.waitFor (fun () -> Vitest.expect(fetch).toHaveBeenCalledTimes 3)
+            Vitest.expect(arrivalsColumn).toHaveClass "is-hidden-mobile"
+            Vitest.expect(mapColumn.classList.contains "is-hidden-mobile").toBe false
+
+            RTL.fireEvent.click arrivals
+            Vitest.expect(mapColumn).toHaveClass "is-hidden-mobile"
+            Vitest.expect(arrivalsColumn.classList.contains "is-hidden-mobile").toBe false
+            Vitest.expect(arrivals).toHaveAttribute ("aria-pressed", "true")
+            Vitest.expect(stationSelect ()).toHaveValue "G24"
+            Vitest.expect(window.location.hash).toBe "#G24"
+            Vitest.expect(fetch).toHaveBeenCalledTimes 3
+        }
+)
+
+Vitest.test (
     "renders arrivals, updates countdowns, and refreshes after a failed fetch",
     fun () ->
         promise {

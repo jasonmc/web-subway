@@ -33,6 +33,8 @@ Inter comes from the locked nixpkgs `inter` package under the SIL Open Font Lice
 
 Standard UI components use Feliz.Bulma 5 and bundled Bulma 1 CSS. Use the Feliz.Bulma API in `src/Ui.fs` for cards, form fields, notifications, and columns. `src/style.css` retains the compact feed-age indicator and wider map column, alongside the custom arrival rows and map/animation styles. Other UI styling follows Bulma defaults. `src/bulma.scss` imports only the Bulma modules the UI uses and its system-driven light/dark themes; add new component modules there as needed. This stylesheet is imported before the custom styles in `src/Main.fs`. Dark mode follows `prefers-color-scheme`, including the map palette and native form controls, and responds when the system preference changes. All CSS remains embedded in the single-file build.
 
+At widths of 768px and below, an Arrivals/Map button group shows one view at a time, defaulting to Arrivals. Larger screens show both columns and hide the switch. Switching views preserves station selection and live updates; resizing back to mobile preserves the chosen view for the current page session.
+
 ## Tests
 
 - `nix fmt` formats the F# app and tests with Fantomas from locked nixpkgs. `nix fmt -- --check` checks without changing files. `.editorconfig` sets basic whitespace rules; other formatting follows Fantomas defaults. `.fantomasignore` excludes generated build and Fable sources.
