@@ -35,8 +35,9 @@ Standard UI components use Feliz.Bulma 5 and bundled Bulma 1 CSS. Use the Feliz.
 
 ## Tests
 
+- `nix fmt` formats the F# app and tests with Fantomas from locked nixpkgs. `nix fmt -- --check` checks without changing files. `.editorconfig` sets basic whitespace rules; other formatting follows Fantomas defaults. `.fantomasignore` excludes generated build and Fable sources.
 - `npm run typecheck`
-- `npm test` builds the production page, compiles `tests/Tests.fsproj` with Fable, and runs Vitest. `nix flake check` executes the same workflow.
+- `npm test` builds the production page, compiles `tests/Tests.fsproj` with Fable, and runs Vitest. `nix flake check` executes the same workflow and checks F# formatting.
 - `npm run test:watch` builds the page once, then watches the F# sources and reruns tests. The standalone-page smoke test uses that initial build; run `npm test` again to verify a fresh production bundle.
 - `npm run test:e2e` remains an alias for `npm test`.
 

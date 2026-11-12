@@ -9,9 +9,7 @@ importSideEffects "./bulma.scss"
 importSideEffects "./style.css"
 
 try
-    Program.mkProgram App.init App.update view
-    |> withReactRoot
-    |> Program.run
+    Program.mkProgram App.init App.update view |> withReactRoot |> Program.run
 with err ->
     JS.console.error err
     setError "Failed to load stops list."

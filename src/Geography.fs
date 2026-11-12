@@ -7,7 +7,6 @@ type latitude
 [<Measure>]
 type longitude
 
-type Coordinates = {
-    latitude: float<latitude>
-    longitude: float<longitude>
-}
+type Coordinates =
+    { latitude: float<latitude>
+      longitude: float<longitude> }

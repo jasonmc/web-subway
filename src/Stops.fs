@@ -12,18 +12,21 @@ let private stopOptions: StopOption array = jsNative
 let private stopFromLocation () : string option =
     try
         match window.location.hash.TrimStart('#') with
-        | "" | null -> None
+        | ""
+        | null -> None
         | h -> Some h
-    with _ -> None
+    with _ ->
+        None
 
 let initStops () =
     let stopLookup = stopOptions |> Array.map (fun s -> s.id, s) |> Map.ofArray
-    let fallback = {
-        id = DEFAULT_STOP_ID_PREFIX
-        name = "Default stop"
-        latitude = None
-        longitude = None
-    }
+
+    let fallback =
+        { id = DEFAULT_STOP_ID_PREFIX
+          name = "Default stop"
+          latitude = None
+          longitude = None }
+
     let defaultStop =
         (stopOptions |> Array.tryFind (fun s -> s.id = DEFAULT_STOP_ID_PREFIX))
         <|> Array.tryHead stopOptions

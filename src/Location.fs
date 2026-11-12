@@ -6,11 +6,20 @@ open Config
 open State
 open Geography
 
-let private nearestStop (stopLookup: Map<string, StopOption>) (lat: float<latitude>) (lon: float<longitude>) : string option =
-    if not (isFinite (float lat) && isFinite (float lon)) || abs lat > 90.0<latitude> || abs lon > 180.0<longitude> then
+let private nearestStop
+    (stopLookup: Map<string, StopOption>)
+    (lat: float<latitude>)
+    (lon: float<longitude>)
+    : string option =
+    if
+        not (isFinite (float lat) && isFinite (float lon))
+        || abs lat > 90.0<latitude>
+        || abs lon > 180.0<longitude>
+    then
         None
     else
         let rad (deg: float<'u>) = float deg * Math.PI / 180.0
+
         let haversine (sLat: float<latitude>) (sLon: float<longitude>) =
             (sin (rad (sLat - lat) / 2.0) ** 2.0)
             + cos (rad lat) * cos (rad sLat) * (sin (rad (sLon - lon) / 2.0) ** 2.0)
@@ -18,7 +27,8 @@ let private nearestStop (stopLookup: Map<string, StopOption>) (lat: float<latitu
         PREFERRED_STOP_ORDER
         |> Array.choose (fun id ->
             match Map.tryFind id stopLookup with
-            | Some { latitude = Some sLat; longitude = Some sLon } -> Some(id, haversine sLat sLon)
+            | Some { latitude = Some sLat
+                     longitude = Some sLon } -> Some(id, haversine sLat sLon)
             | _ -> None)
         |> function
             | [||] -> None
@@ -45,13 +55,15 @@ let nearestStopFromDevice (stopLookup: Map<string, StopOption>) () : Async<(stri
             try
                 getCurrentPosition
                     (fun pos ->
-                        let coords = {
-                            latitude = LanguagePrimitives.FloatWithMeasure<latitude> pos.coords.latitude
-                            longitude = LanguagePrimitives.FloatWithMeasure<longitude> pos.coords.longitude
-                        }
+                        let coords =
+                            { latitude = LanguagePrimitives.FloatWithMeasure<latitude> pos.coords.latitude
+                              longitude = LanguagePrimitives.FloatWithMeasure<longitude> pos.coords.longitude }
+
                         let result =
                             nearestStop stopLookup coords.latitude coords.longitude
                             |> Option.map (fun stopId -> stopId, coords)
+
                         resolve result)
                     (fun _ -> resolve None)
-            with _ -> resolve None)
+            with _ ->
+                resolve None)

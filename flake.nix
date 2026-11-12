@@ -258,10 +258,24 @@
         packages.stops-json = stopsJson;
         packages.inter-fonts = interFonts;
         packages.branding = branding;
+        formatter = pkgs.writeShellApplication {
+          name = "format-fsharp";
+          runtimeInputs = [ pkgs.fantomas ];
+          text = ''
+            exec fantomas "$@" src tests
+          '';
+        };
+        checks.formatting = pkgs.runCommand "check-fsharp-formatting" {
+          nativeBuildInputs = [ pkgs.fantomas ];
+        } ''
+          cp -r ${src}/. .
+          fantomas --check src tests
+          touch $out
+        '';
         checks.e2e = tests;
         devShells.default = pkgs.mkShell {
           inputsFrom = [ web ];
-          packages = [ pkgs.curl pkgs.gdalMinimal pkgs.osmium-tool ];
+          packages = [ pkgs.curl pkgs.gdalMinimal pkgs.osmium-tool pkgs.fantomas ];
           shellHook = ''
             ln -sf ${mapSvg} g_corridor.svg
             ln -sf ${stopsJson} stops.json
