@@ -194,6 +194,22 @@
           done
           cp ${pkgs.inter.src}/LICENSE.txt $out/LICENSE.txt
         '';
+        brandTypst = pkgs.typst.withPackages (ps: [ ps.cetz ]);
+        branding = pkgs.runCommand "g-train-branding" {
+          nativeBuildInputs = [ brandTypst pkgs.librsvg ];
+        } ''
+          mkdir -p $out
+          for asset in icon app-icon share; do
+            typst compile --ignore-system-fonts \
+              --font-path ${pkgs.inter}/share/fonts \
+              ${./assets}/$asset.typ $out/$asset.svg
+          done
+          rsvg-convert -w 32 -h 32 $out/icon.svg -o $out/favicon-32.png
+          rsvg-convert -w 180 -h 180 $out/app-icon.svg -o $out/apple-touch-icon.png
+          rsvg-convert -w 192 -h 192 $out/app-icon.svg -o $out/icon-192.png
+          rsvg-convert -w 512 -h 512 $out/app-icon.svg -o $out/icon-512.png
+          rsvg-convert -w 1200 -h 630 $out/share.svg -o $out/share.png
+        '';
         web = pkgs.buildNpmPackage ({
           pname = "greenpoint-subway-web";
           version = "0.1.0";
@@ -203,6 +219,8 @@
             cp ${mapSvg} g_corridor.svg
             cp ${stopsJson} stops.json
             ln -s ${interFonts} inter-fonts
+            mkdir -p public
+            ln -s ${branding} public/branding
           '';
           installPhase = ''
             runHook preInstall
@@ -225,6 +243,8 @@
             cp ${mapSvg} g_corridor.svg
             cp ${stopsJson} stops.json
             ln -s ${interFonts} inter-fonts
+            mkdir -p public
+            ln -s ${branding} public/branding
           '';
           installPhase = ''
             runHook preInstall
@@ -237,6 +257,7 @@
         packages.map-svg = mapSvg;
         packages.stops-json = stopsJson;
         packages.inter-fonts = interFonts;
+        packages.branding = branding;
         checks.e2e = tests;
         devShells.default = pkgs.mkShell {
           inputsFrom = [ web ];
@@ -245,6 +266,8 @@
             ln -sf ${mapSvg} g_corridor.svg
             ln -sf ${stopsJson} stops.json
             ln -sfn ${interFonts} inter-fonts
+            mkdir -p public
+            ln -sfn ${branding} public/branding
           '';
         };
       });

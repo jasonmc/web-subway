@@ -58,11 +58,19 @@ One-time setup:
 2. Commit and push the workflow to `master`.
 3. Open **Actions → Deploy to GitHub Pages** and wait for the deployment to finish.
 
-The site will be available at <https://jasonmc.github.io/web-subway/>. All scripts, styles, station data, and the map are embedded in `index.html`, so no Vite base-path change is needed for `/web-subway/`. Pages provides HTTPS for device location. The public MTA feed is fetched directly by the browser; no API key or repository secret is needed.
+The canonical address is <https://g.apps.jasonmc.net/>. Scripts, styles, station data, the map, favicons, and the manifest with its app icons are embedded in `index.html`. The Apple touch icon and share image remain separate files. Pages provides HTTPS for device location. The public MTA feed is fetched directly by the browser; no API key or repository secret is needed.
+
+## Icons, installation, and sharing
+
+`assets/icon.typ`, `assets/app-icon.typ`, and `assets/share.typ` define the favicon, home-screen icons, and 1200 × 630 link preview in Typst + CeTZ. They share the Inter G badge and palette in `assets/brand.typ`. The favicon is a green circle with a white G; home-screen icons place the badge on a navy background with room for platform masking.
+
+The Nix `branding` package supplies Typst, CeTZ and its dependencies from locked nixpkgs, and the same Inter font used by the app. System fonts are disabled. Typst exports self-contained SVGs with outlined text, then librsvg renders the PNG sizes. Run `nix build .#branding` to generate the artwork. `nix develop` links it into `public/branding`. Vite embeds the favicons and `assets/site.webmanifest` with its PNG icons as data URLs. Only `branding/apple-touch-icon.png` and `branding/share.png` remain alongside `index.html` in the distribution; deploy those too for Apple home-screen icons and link previews.
+
+The manifest provides the app name, icons, and standalone window settings for home-screen installation. Its launch URL, scope, and ID are made absolute using `siteUrl` in `vite.config.ts`, because the embedded manifest has no directory against which to resolve relative URLs. The same setting supplies the canonical link and Open Graph page/image URLs. This adds no service worker or offline cache; arrivals still require a connection. Open Graph metadata provides a static preview for iMessage and other link sharing. Update `siteUrl` if the public address changes. URL fragments such as `#G26` share the same preview. Embedded-manifest installation still needs verification on an actual iPhone; the Apple touch icon remains external for compatibility.
 
 ## Nix build (single-file, no CDN)
 
-There is a standalone flake in this folder that builds the static site (`flake.nix`). The Vite build is configured with `vite-plugin-singlefile`, so the output `dist/index.html` contains all JS/CSS inlined (no CDN and no additional assets).
+There is a standalone flake in this folder that builds the static site (`flake.nix`). The Vite build is configured with `vite-plugin-singlefile`, so the output `dist/index.html` contains all JS/CSS inlined with no CDN. Favicons and the manifest with app icons are also embedded. Only the Apple touch icon and share preview are separate files.
 
 1. Ensure you have Node/npm available (needed only to produce `package-lock.json` and the npm dependency hash).
 2. From `web-subway/`, run `npm install --package-lock-only` once to generate `package-lock.json`.
@@ -71,10 +79,11 @@ There is a standalone flake in this folder that builds the static site (`flake.n
    nix build .#default --print-build-logs
    ```
    Nix will fail with a hash mismatch showing the actual dependency hash. Set `npmDepsHash` in `flake.nix` to that value.
-4. Re-run `nix build .#default` to produce a fully bundled `dist/` and a final `$out` containing `index.html` and JS/CSS with no CDN references.
+4. Re-run `nix build .#default` to produce a bundled `dist/` and a final `$out` containing `index.html` and the two external images with no CDN references.
 
 The flake exposes:
 - `packages.default`: the bundled static site
+- `packages.branding`: the generated favicon, home-screen icons, and share preview
 - `devShells.default`: .NET + Fable + Node + npm + vite for local dev
 
 ## Notes
