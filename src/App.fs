@@ -196,16 +196,10 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
         { model with spotlightTripId = next }, Cmd.none
 
     | TickAge ->
-        let nextStatus =
-            match model.lastFeedTimestampMs with
-            | Some ts -> FeedAge(Some ts)
-            | None -> model.status
-
         let nextMapTrains, nextSpinePositions =
             recomputeTrains model.lastFeedTimestampMs model.stopLookup model.spinePosByTrip model.rawTrips
 
         { model with
-            status = nextStatus
             mapTrains = nextMapTrains
             spinePosByTrip = nextSpinePositions },
         Cmd.none

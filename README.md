@@ -43,7 +43,9 @@ At widths of 768px and below, an Arrivals/Map button group shows one view at a t
 - `npm run test:watch` builds the page once, then watches the F# sources and reruns tests. The standalone-page smoke test uses that initial build; run `npm test` again to verify a fresh production bundle.
 - `npm run test:e2e` remains an alias for `npm test`.
 
-Tests follow Feliz's Vitest and React Testing Library setup, using the published F# bindings. `App.test.fs` renders the app view with its actual Elmish initialization/update functions, mocked MTA responses and geolocation, and Vitest's controlled clock. `Feed.test.fs` tests decoding, direction detection, interpolation, time formatting, and generated station coordinates directly. `Bundle.test.fs` additionally boots the inlined script from `dist/index.html` in an isolated jsdom page to check production packaging. Test dependencies are excluded from the shipped page.
+Tests follow Feliz's Vitest and React Testing Library setup, using the published F# bindings. `App.test.fs` renders the app view with its actual Elmish initialization/update functions, mocked MTA responses and geolocation, and Vitest's controlled clock. `Feed.test.fs` tests decoding, direction detection, interpolation, time formatting, and generated station coordinates directly.
+
+`Bundle.test.fs` boots the actual inlined script from `dist/index.html` in isolated jsdom pages. It checks production metadata and startup, destination grouping, dropdown and map station selection, URL and late-geolocation precedence, countdowns, failed-refresh recovery, train movement, and the view switch. The pages use Vitest's controlled clock and intervals; async timeouts remain real. These are production-bundle integration tests, without a browser layout engine or live MTA network requests. Test dependencies are excluded from the shipped page.
 
 `src/App.fs` holds the app's initialization and update functions; `src/Main.fs` is the browser entry point. The test project shares the app source files while excluding that entry point, so importing the code does not start a second app.
 
