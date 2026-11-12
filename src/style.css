@@ -98,6 +98,25 @@ body {
   margin-bottom: 20px;
 }
 
+.station-field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.station-field .control {
+  min-width: 0;
+}
+
+.station-icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  color: var(--route-badge);
+}
+
 .station-field select {
   min-width: 220px;
   max-width: 100%;

@@ -422,7 +422,31 @@ let view (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
                     [ Bulma.field.div
                           [ prop.className "station-field mb-0"
                             prop.children
-                                [ Bulma.control.div
+                                [ Svg.svg
+                                      [ svg.className "station-icon"
+                                        svg.viewBox (0, 0, 24, 24)
+                                        svg.custom ("aria-hidden", "true")
+                                        svg.children
+                                            [ Svg.rect
+                                                  [ svg.x 4
+                                                    svg.y 2
+                                                    svg.width 16
+                                                    svg.height 18
+                                                    svg.rx 4
+                                                    svg.fill "currentColor" ]
+                                              Svg.rect
+                                                  [ svg.x 6.5
+                                                    svg.y 5
+                                                    svg.width 11
+                                                    svg.height 7
+                                                    svg.rx 1
+                                                    svg.fill "#ffffff" ]
+                                              Svg.circle [ svg.cx 8; svg.cy 16; svg.r 1.5; svg.fill "#ffffff" ]
+                                              Svg.circle [ svg.cx 16; svg.cy 16; svg.r 1.5; svg.fill "#ffffff" ]
+                                              Svg.path
+                                                  [ svg.d "M7 23 L10 19 H14 L17 23 H15 L13.5 21 H10.5 L9 23 Z"
+                                                    svg.fill "currentColor" ] ] ]
+                                  Bulma.control.div
                                       [ Bulma.select
                                             [ select.isMedium
                                               color.isSuccess
