@@ -57,6 +57,45 @@ Vitest.test (
         Vitest.expect(arrivals.Southbound[0].destinationStopId).toEqual (Some "A42")
 )
 
+for station, terminalPlatform, departingPlatform, onwardPlatform, inboundDirection, outboundDirection in
+    [ "G22", "G22N", "G22S", "G26S", 0, 1
+      "F27", "F27S", "F27N", "G26N", 1, 0
+      "G24", "G24N", "G24N", "G22N", 0, 0 ] do
+    Vitest.test (
+        $"omits trips ending at {station} while keeping departures and through trains",
+        fun () ->
+            let approach = if inboundDirection = 0 then "G26N" else "G26S"
+
+            let feed =
+                encode
+                    [| trip
+                           "terminating"
+                           "terminating"
+                           inboundDirection
+                           [| call approach 60.0<seconds>; call terminalPlatform 120.0<seconds> |]
+                       trip
+                           "departing"
+                           "departing"
+                           outboundDirection
+                           [| box
+                                  {| stopId = departingPlatform
+                                     departure = {| time = float (fixedNowSec + 180.0<seconds>) |} |}
+                              box (call onwardPlatform 360.0<seconds>) |] |]
+                |> decodeFeed
+
+            let arrivals, _ = parseFeed feed station
+            let all = Array.concat [ arrivals.Northbound; arrivals.Southbound; arrivals.Other ]
+            Vitest.expect(all |> Array.map _.tripId).toEqual [| Some "departing" |]
+            Vitest.expect(all[0].time).toEqual (instantFromSeconds (fixedNowSec + 180.0<seconds>))
+            // The terminating trip is still useful at an earlier boarding stop.
+            let upstream, _ = parseFeed feed "G26"
+
+            let upstreamTrips =
+                Array.concat [ upstream.Northbound; upstream.Southbound; upstream.Other ]
+
+            Vitest.expect(upstreamTrips |> Array.map _.tripId).toEqual [| Some "terminating" |]
+    )
+
 Vitest.test (
     "uses terminal stops without predictions and ignores skipped or empty trailing stops",
     fun () ->

@@ -587,7 +587,9 @@ let parseFeed (feed: IFeedMessage) (stopIdPrefix: string) : ArrivalGroup * FeedM
                            | _, EventTime ts ->
                                let whenDate = instantFromSeconds ts
 
-                               if whenDate >= currentNow then
+                               // The arrival board is for boarding: omit trips
+                               // ending here, including temporary short turns.
+                               if whenDate >= currentNow && destination <> Some stopIdPrefix then
                                    let dir =
                                        if stopId.EndsWith("N") then Northbound
                                        elif stopId.EndsWith("S") then Southbound

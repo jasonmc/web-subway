@@ -166,7 +166,8 @@ Vitest.test (
                            "south"
                            "south"
                            1
-                           [| call "G24S" 60.0<seconds>
+                           [| call "G22S" 30.0<seconds>
+                              call "G24S" 60.0<seconds>
                               call "G26S" 120.0<seconds>
                               call "F27S" 1200.0<seconds> |] |]
 
@@ -198,6 +199,20 @@ Vitest.test (
 
             Vitest.expect(page.Query "#stop-select").toHaveValue "G24"
             Vitest.expect(page.Hash).toBe "#G24"
+            Vitest.expect(page.Query "#lists .arrival[data-trip-id='short']").toBeNull ()
+            Vitest.expect(page.Query "h2[aria-label='Northbound to 21 St']").toBeNull ()
+
+            page.SelectStation "G22"
+            do! page.WaitFor(fun () -> Vitest.expect(fetch).toHaveBeenCalledTimes 3)
+
+            do!
+                page.WaitFor(fun () ->
+                    Vitest.expect(page.Query "[data-trip-id='south'] .meta").toHaveTextContent "<1 min")
+
+            Vitest.expect(page.Query "h2[aria-label='Northbound to Court Sq']").toBeNull ()
+            Vitest.expect(page.Query("#lists").querySelectorAll(".arrival").length).toBe 1
+            Vitest.expect(page.Query "h2[aria-label='Southbound to Church Av']").toHaveTextContent "Church Av"
+            Vitest.expect(page.Query "#stop-select").toHaveValue "G22"
         }
 )
 
@@ -326,7 +341,9 @@ Vitest.test (
                            "smoke"
                            0
                            [| {| stopId = "G26N"
-                                 arrival = {| time = float (now + 120.0<seconds>) |} |} |] |]
+                                 arrival = {| time = float (now + 120.0<seconds>) |} |}
+                              {| stopId = "G22N"
+                                 arrival = {| time = float (now + 360.0<seconds>) |} |} |] |]
 
             let fetch =
                 vi.fn (fun (_: string) -> JS.Constructors.Promise.resolve (response buffer 200))
@@ -339,8 +356,7 @@ Vitest.test (
                 do!
                     RTL.waitFor (
                         (fun () ->
-                            Vitest.expect(dom.window.document.querySelector("#lists").textContent).toContain
-                                "Greenpoint Av"),
+                            Vitest.expect(dom.window.document.querySelector("#lists").textContent).toContain "Court Sq"),
                         RTLWaitForOptions(container = dom.window.document.body)
                     )
 

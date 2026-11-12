@@ -114,9 +114,9 @@ Vitest.test (
             Vitest.expect(fetch).toHaveBeenCalledTimes 1
 
             Vitest
-                .expect(RTL.screen.getByRole ("heading", ByRoleOptions(name = Text "Southbound to Greenpoint Av")))
+                .expect(RTL.screen.getByRole ("heading", ByRoleOptions(name = Text "Southbound to Church Av")))
                 .toHaveTextContent
-                "Greenpoint Av"
+                "Church Av"
 
             let lists = document.querySelector "#lists"
             Vitest.expect(lists).toHaveTextContent "in 2 min"

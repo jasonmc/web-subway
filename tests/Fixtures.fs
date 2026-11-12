@@ -72,9 +72,9 @@ let encode entities = encodeAt fixedNowSec entities
 
 let arrivalsFeed () =
     encode
-        [| trip "north-1" "north-1" 0 [| call "G26N" 120.0<seconds> |]
-           trip "north-2" "north-2" 0 [| call "G26N" 300.0<seconds> |]
-           trip "south-1" "south-1" 1 [| call "G26S" 420.0<seconds> |]
+        [| trip "north-1" "north-1" 0 [| call "G26N" 120.0<seconds>; call "G22N" 360.0<seconds> |]
+           trip "north-2" "north-2" 0 [| call "G26N" 300.0<seconds>; call "G22N" 540.0<seconds> |]
+           trip "south-1" "south-1" 1 [| call "G26S" 420.0<seconds>; call "F27S" 1800.0<seconds> |]
            trip "other-stop" "other-stop" 0 [| call "ZZZ" 60.0<seconds> |] |]
 
 let trainsFeed () =
@@ -88,7 +88,13 @@ let trainsFeed () =
                   call "G24N" 210.0<seconds>
                   call "G22N" 330.0<seconds> |]
            // The stop suffix and trip ID must override this misleading directionId.
-           trip "south-train" "123_G..S" 0 [| call "G24S" 80.0<seconds>; call "G26S" 200.0<seconds> |]
+           trip
+               "south-train"
+               "123_G..S"
+               0
+               [| call "G24S" 80.0<seconds>
+                  call "G26S" 200.0<seconds>
+                  call "F27S" 1800.0<seconds> |]
            vehicle "south-train-veh" "123_G..S" "G22S" 1 1 -35.0<seconds>
            trip "unstarted-future" "999_G..S" 0 [| call "G22S" 600.0<seconds>; call "G24S" 660.0<seconds> |]
            vehicle "unstarted-future-veh" "999_G..S" "G22S" 2 0 600.0<seconds> |]
