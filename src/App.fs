@@ -22,12 +22,12 @@ type IResponse =
 [<Emit("import.meta.env.VITE_MTA_FEED_URL")>]
 let private envFeedUrl: string option = jsNative
 
-[<Emit("fetch($0, { mode: 'cors' })")>]
-let private fetchCors (url: string) : JS.Promise<IResponse> = jsNative
+[<Emit("fetch($0, { mode: 'cors', signal: AbortSignal.timeout($1) })")>]
+let private fetchCors (url: string) (timeout: int<milliseconds>) : JS.Promise<IResponse> = jsNative
 
 let private fetchSnapshot () : Async<DateTimeOffset * FeedSnapshot> =
     async {
-        let! res = Async.AwaitPromise(fetchCors (envFeedUrl |? DEFAULT_FEED_URL))
+        let! res = Async.AwaitPromise(fetchCors (envFeedUrl |? DEFAULT_FEED_URL) 10000<milliseconds>)
 
         if not res.ok then
             return failwith $"Request failed: {res.status} {res.statusText}"

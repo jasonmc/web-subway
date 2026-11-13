@@ -10,6 +10,65 @@ open Time
 
 Vitest.beforeEach (fun () -> resetBrowser "")
 
+[<Emit("new AbortController()")>]
+let private abortController () : obj = jsNative
+
+[<Emit("$0.abort(new DOMException('The operation timed out.', 'TimeoutError'))")>]
+let private expireRequest (controller: obj) : unit = jsNative
+
+[<Emit("new Promise((resolve, reject) => { if ($0) $0.addEventListener('abort', () => reject($0.reason), { once: true }); })")>]
+let private waitForAbort<'T> (signal: obj) : JS.Promise<'T> = jsNative
+
+for stallBody in [ false; true ] do
+    Vitest.test (
+        (if stallBody then
+             "recovers from a timeout while reading the feed body"
+         else
+             "recovers from a timeout while waiting for feed headers"),
+        fun () ->
+            promise {
+                let controller = abortController ()
+                // Trigger the browser deadline explicitly, without waiting ten real seconds.
+                let timeout = vi.fn (fun (_: int) -> controller?signal)
+                vi.stubGlobal ("AbortSignal", createObj [ "timeout" ==> timeout ])
+                let mutable requests = 0
+
+                let fetch = vi.fn<obj, obj> ()
+
+                fetch?mockImplementation (
+                    Func<string, obj, JS.Promise<App.IResponse>>(fun _ options ->
+                        requests <- requests + 1
+
+                        if requests > 1 then
+                            JS.Constructors.Promise.resolve (response (arrivalsFeed ()) 200)
+                        elif stallBody then
+                            JS.Constructors.Promise.resolve (
+                                unbox<App.IResponse> (
+                                    createObj
+                                        [ "ok" ==> true
+                                          "arrayBuffer" ==> (fun () -> waitForAbort<JS.ArrayBuffer> options?signal) ]
+                                )
+                            )
+                        else
+                            waitForAbort<App.IResponse> options?signal)
+                )
+                |> ignore
+
+                vi.stubGlobal ("fetch", fetch)
+                renderApp () |> ignore
+                do! vi.waitFor (fun () -> Vitest.expect(fetch).toHaveBeenCalledTimes 1)
+                Vitest.expect(timeout).toHaveBeenCalledWith [| box 10000 |]
+                do! advance 5000<milliseconds>
+                Vitest.expect(fetch).toHaveBeenCalledTimes 1
+                expireRequest controller
+                do! RTL.waitFor (fun () -> Vitest.expect(document.querySelector "#status").toHaveClass "error")
+                do! advance 5000<milliseconds>
+                do! waitForArrivals ()
+                Vitest.expect(fetch).toHaveBeenCalledTimes 2
+                Vitest.expect(document.querySelector "#status").toHaveTextContent "Feed age:"
+            }
+    )
+
 Vitest.test (
     "rendering the same model keeps countdown and feed age unchanged when the wall clock changes",
     fun () ->

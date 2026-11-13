@@ -25,6 +25,8 @@ Open the printed local URL. On a fresh visit, allow device location to automatic
 
 Each feed response contains all stations and is cached as a typed snapshot. Station changes select arrivals locally from that snapshot without another request. A response that arrives after a station change is applied to the current selection. Scheduled refreshes continue every five seconds independently of station selection.
 
+Feed requests use `AbortSignal.timeout` with a ten-second deadline, including reading the response body. A timeout follows the normal error path, preserving the previous arrivals and allowing the next scheduled poll to retry.
+
 Station IDs, names, and coordinates are bundled together in `all_stops.csv` (`stop_id`, `stop_name`, `stop_lat`, `stop_lon`). Coordinates come from the [MTA Subway Stations dataset](https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f) (retrieved October 23, 2026). Stops with missing coordinates still have names available but are skipped for nearest-station selection. Nearest-station selection runs on the device using straight-line distance among the stations supported by this G train feed; location is not sent to the app's server or MTA.
 
 The stops CSV is embedded directly in the single HTML build. Enable HTTP compression on your web server to reduce transfer size; the browser handles decompression automatically.
