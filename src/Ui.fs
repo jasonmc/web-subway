@@ -400,20 +400,20 @@ let private renderViewSwitch (selected: MobileView) (dispatch: Dispatch<Msg>) =
 
 let view (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
     let available = model.availableStops |> Option.filter (not << Set.isEmpty)
+    let northToSouth = Array.rev PREFERRED_STOP_ORDER
 
     let matchingIds =
-        PREFERRED_STOP_ORDER
+        northToSouth
         |> Array.filter (fun id -> available |> Option.forall (Set.contains id))
 
-    let finalIds =
-        if matchingIds.Length > 0 then
-            matchingIds
-        else
-            PREFERRED_STOP_ORDER
+    let finalIds = if matchingIds.Length > 0 then matchingIds else northToSouth
 
     let preservedIds =
         if Array.contains model.selectedStopPrefix finalIds then
             finalIds
+        elif Array.contains model.selectedStopPrefix northToSouth then
+            northToSouth
+            |> Array.filter (fun id -> id = model.selectedStopPrefix || Array.contains id finalIds)
         else
             Array.append [| model.selectedStopPrefix |] finalIds
 
@@ -433,8 +433,9 @@ let view (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
         [ Html.header
               [ prop.className "app-header"
                 prop.children
-                    [ Bulma.field.div
-                          [ prop.className "station-field mb-0"
+                    [ Bulma.control.div
+                          [ control.hasIconsLeft
+                            prop.className "station-field mb-0"
                             prop.children
                                 [ Svg.svg
                                       [ svg.className "station-icon"
@@ -460,6 +461,7 @@ let view (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
                                               Svg.path
                                                   [ svg.d "M7 23 L10 19 H14 L17 23 H15 L13.5 21 H10.5 L9 23 Z"
                                                     svg.fill "currentColor" ] ] ]
+                                  |> fun train -> Bulma.icon [ icon.isLeft; icon.isMedium; prop.children [ train ] ]
                                   Bulma.control.div
                                       [ Bulma.select
                                             [ select.isMedium

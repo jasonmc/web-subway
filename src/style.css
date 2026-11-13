@@ -99,9 +99,6 @@ body {
 }
 
 .station-field {
-  display: flex;
-  align-items: center;
-  gap: 12px;
   min-width: 0;
   max-width: 100%;
 }
@@ -110,9 +107,13 @@ body {
   min-width: 0;
 }
 
+.station-field .icon {
+  font-size: var(--bulma-size-medium);
+}
+
 .station-icon {
-  width: 32px;
-  height: 32px;
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
   color: var(--route-badge);
 }
