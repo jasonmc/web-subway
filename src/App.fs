@@ -39,12 +39,11 @@ let private fetchSnapshot () : Async<DateTimeOffset * FeedSnapshot> =
 
 let private recomputeTrains
     (now: DateTimeOffset)
-    (headerTimestampMs: float<milliseconds> option)
     (stopLookup: Map<string, StopOption>)
     (prevPositions: Map<string, float * float<seconds>>)
     (rawTrips: RawTrainTrip array)
     : EstimatedTrain array * Map<string, float * float<seconds>> =
-    estimateTrainPositions (effectiveNowSec now headerTimestampMs) stopLookup prevPositions rawTrips
+    estimateTrainPositions (now |> instantToMilliseconds |> millisecondsToSeconds) stopLookup prevPositions rawTrips
 
 let private visibleTotal (arrivals: ArrivalGroup) =
     min arrivals.Northbound.Length ARRIVALS_PER_DIRECTION
@@ -155,7 +154,7 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
                 Some feed.availableStops
 
         let nextMapTrains, nextSpinePositions =
-            recomputeTrains now meta.headerTimestampMs model.stopLookup model.spinePosByTrip feed.rawTrips
+            recomputeTrains now model.stopLookup model.spinePosByTrip feed.rawTrips
 
         { model with
             now = now
@@ -197,7 +196,7 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
 
     | Tick now ->
         let nextMapTrains, nextSpinePositions =
-            recomputeTrains now model.lastFeedTimestampMs model.stopLookup model.spinePosByTrip model.rawTrips
+            recomputeTrains now model.stopLookup model.spinePosByTrip model.rawTrips
 
         { model with
             now = now

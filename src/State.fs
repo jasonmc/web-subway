@@ -35,10 +35,21 @@ type TrainStopCall =
       arriveSec: float<seconds>
       departSec: float<seconds> }
 
+type VehicleStatus =
+    | IncomingAt
+    | StoppedAt
+    | InTransitTo
+
+type ReportedTrainPosition =
+    { stopId: string
+      status: VehicleStatus
+      observedSec: float<seconds> }
+
 type RawTrainTrip =
     { tripId: string
       direction: Direction
-      calls: TrainStopCall array }
+      calls: TrainStopCall array
+      reportedPosition: ReportedTrainPosition option }
 
 type FeedSnapshot =
     { availableStops: Set<string>

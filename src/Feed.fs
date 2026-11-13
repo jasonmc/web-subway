@@ -133,6 +133,7 @@ type IVehiclePosition =
     abstract trip: ITripDescriptor option
     abstract stopId: string option
     abstract currentStopSequence: obj option
+    abstract currentStatus: obj option
     abstract timestamp: obj option
 
 type IFeedEntity =
@@ -200,29 +201,21 @@ let private smoothProgress (rawP: float) : float =
     let t = clamp 0.0 1.0 rawP
     0.58 * t + 0.42 * (t * t * (3.0 - 2.0 * t))
 
-// Snap wall clock into the feed's clock frame if MTA has a DST/timezone offset (> 25 min skew)
-let effectiveNowSec (now: DateTimeOffset) (headerTimestampMs: float<milliseconds> option) : float<seconds> =
-    let wallSec = now |> instantToMilliseconds |> millisecondsToSeconds
-
-    match headerTimestampMs with
-    | Some ms when ms > 0.0<milliseconds> ->
-        let diff = millisecondsToSeconds ms - wallSec
-
-        if abs diff > 1500.0<seconds> then
-            wallSec + Math.Round(diff / 1800.0<seconds>) * 1800.0<seconds>
-        else
-            wallSec
-    | _ -> wallSec
+let private recentReport (nowSec: float<seconds>) (report: ReportedTrainPosition) =
+    report.observedSec >= nowSec - 300.0<seconds>
+    && report.observedSec <= nowSec + 5.0<seconds>
 
 // Extract active train trajectories along the G line, fusing TripUpdate and VehiclePosition entities
 let extractRawTrips (now: DateTimeOffset) (feed: IFeedMessage) : RawTrainTrip array =
-    let headerMs =
-        feed.header
-        |> Option.bind (fun h -> toSeconds h.timestamp)
-        |> Option.filter ((<>) 0.0<seconds>)
-        |> Option.map secondsToMilliseconds
+    let nowSec = now |> instantToMilliseconds |> millisecondsToSeconds
 
-    let nowSec = effectiveNowSec now headerMs
+    // The vehicle timestamp records its last movement, so a stopped train can
+    // have an old timestamp in a fresh feed. Age the report using the feed itself.
+    let observedSec =
+        feed.header
+        |> Option.bind (fun header -> toSeconds header.timestamp)
+        |> Option.filter (fun timestamp -> timestamp > 0.0<seconds>)
+        |? nowSec
 
     let vehiclesByTrip =
         [| for entity in feed.entity do
@@ -233,7 +226,15 @@ let extractRawTrips (now: DateTimeOffset) (feed: IFeedMessage) : RawTrainTrip ar
                        let rawStopOpt = v.stopId |> Option.filter ((<>) "")
                        let tsOpt = toSeconds v.timestamp |> Option.filter ((<>) 0.0<seconds>)
                        let seqOpt = toInt v.currentStopSequence |> Option.map int
-                       tid, (rawStopOpt, tsOpt, seqOpt)
+
+                       let statusOpt =
+                           match toInt v.currentStatus with
+                           | Some 0.0 -> Some IncomingAt
+                           | Some 1.0 -> Some StoppedAt
+                           | Some 2.0 -> Some InTransitTo
+                           | _ -> None
+
+                       tid, (rawStopOpt, tsOpt, seqOpt, statusOpt)
                    | _ -> ()
                | None -> () |]
         |> Map.ofArray
@@ -251,10 +252,25 @@ let extractRawTrips (now: DateTimeOffset) (feed: IFeedMessage) : RawTrainTrip ar
                    | Some 1.0 -> Southbound
                    | _ -> Other
 
-               let rawVehStopOpt, vehTsOpt, vehSeqOpt =
+               let rawVehStopOpt, vehTsOpt, vehSeqOpt, vehStatusOpt =
                    match Map.tryFind tripId vehiclesByTrip with
-                   | Some(rawStop, ts, seq) -> rawStop, ts, seq
-                   | None -> None, None, None
+                   | Some report -> report
+                   | None -> None, None, None, None
+
+               let reportedPosition =
+                   match rawVehStopOpt, vehStatusOpt with
+                   | Some rawStop, Some status when vehSeqOpt <> Some 0 ->
+                       let stopId = STOP_SUFFIX_RE.Replace(rawStop, "")
+
+                       if Set.contains stopId spineStopSet then
+                           Some
+                               { stopId = stopId
+                                 status = status
+                                 observedSec = observedSec }
+                           |> Option.filter (recentReport nowSec)
+                       else
+                           None
+                   | _ -> None
 
                let dirFromId (s: string) =
                    if s.EndsWith("N") then Some Northbound
@@ -295,9 +311,11 @@ let extractRawTrips (now: DateTimeOffset) (feed: IFeedMessage) : RawTrainTrip ar
                    |> Array.sortBy _.arriveSec
 
                let dir =
-                   (spineStus
-                    |> Array.choose (fun (rawId, _, _) -> dirFromId rawId)
-                    |> Array.tryLast)
+                   (reportedPosition
+                    |> Option.bind (fun _ -> rawVehStopOpt |> Option.bind dirFromId))
+                   <|> (spineStus
+                        |> Array.choose (fun (rawId, _, _) -> dirFromId rawId)
+                        |> Array.tryLast)
                    <|> (if tripId.Contains("..N") then Some Northbound
                         elif tripId.Contains("..S") then Some Southbound
                         else rawVehStopOpt |> Option.bind dirFromId)
@@ -342,13 +360,15 @@ let extractRawTrips (now: DateTimeOffset) (feed: IFeedMessage) : RawTrainTrip ar
                            || (dir = Northbound && calls[0].stopId = "F27")))
 
                if
-                   calls.Length > 0
-                   && not isUnstarted
-                   && (calls |> Array.exists (fun c -> c.departSec >= nowSec - 10.0<seconds>))
+                   Option.isSome reportedPosition
+                   || (calls.Length > 0
+                       && not isUnstarted
+                       && (calls |> Array.exists (fun c -> c.departSec >= nowSec - 10.0<seconds>)))
                then
                    { tripId = tripId
                      direction = dir
-                     calls = calls } |]
+                     calls = calls
+                     reportedPosition = reportedPosition } |]
     |> Array.sortBy _.tripId
 
 // Interpolate a continuous index (0.0 .. 20.0) along PREFERRED_STOP_ORDER into (latitude, longitude, headingDeg)
@@ -426,85 +446,133 @@ let estimateTrainPositions
                 else
                     c.departSec + 10.0<seconds>
 
-            distinctCalls
-            |> Array.tryFindIndex (fun c -> c.departSec >= nowSec - 5.0<seconds>)
-            |> Option.bind (fun nextIdx ->
-                let nextCall = distinctCalls[nextIdx]
-                let nextSpineIdx = spineIndexByStop |> Map.tryFind nextCall.stopId |? 0
-                let remSec = nextCall.arriveSec - nowSec
+            let predictedPosition =
+                distinctCalls
+                |> Array.tryFindIndex (fun c -> c.departSec >= nowSec - 5.0<seconds>)
+                |> Option.bind (fun nextIdx ->
+                    let nextCall = distinctCalls[nextIdx]
+                    let nextSpineIdx = spineIndexByStop |> Map.tryFind nextCall.stopId |? 0
+                    let remSec = nextCall.arriveSec - nowSec
 
-                // PREFERRED_STOP_ORDER runs South (F27 = 0) to North (G22 = 20)
-                let targetSpinePosOpt =
-                    if remSec <= 8.0<seconds> then
-                        Some(float nextSpineIdx)
-                    elif nextIdx > 0 then
-                        let prevCall = distinctCalls[nextIdx - 1]
-                        let prevSpineIdx = spineIndexByStop |> Map.tryFind prevCall.stopId |? nextSpineIdx
-                        let effDepSec = effectiveDepart (nextIdx - 1) prevCall
-
-                        if nowSec <= effDepSec then
-                            Some(float prevSpineIdx)
-                        else
-                            let p =
-                                clamp
-                                    0.02
-                                    0.98
-                                    (smoothProgress (
-                                        (nowSec - effDepSec) / max 25.0<seconds> (nextCall.arriveSec - effDepSec)
-                                    ))
-
-                            Some(float prevSpineIdx + (float nextSpineIdx - float prevSpineIdx) * p)
-                    else
-                        let upstreamSpineIdx =
-                            match trip.direction with
-                            | Northbound -> max 0 (nextSpineIdx - 1)
-                            | Southbound -> min (PREFERRED_STOP_ORDER.Length - 1) (nextSpineIdx + 1)
-                            | Other -> nextSpineIdx
-
-                        if upstreamSpineIdx <> nextSpineIdx && remSec <= 150.0<seconds> then
-                            let p = clamp 0.03 0.98 (smoothProgress (1.0 - remSec / max remSec 95.0<seconds>))
-                            Some(float upstreamSpineIdx + (float nextSpineIdx - float upstreamSpineIdx) * p)
-                        elif upstreamSpineIdx = nextSpineIdx then
+                    // PREFERRED_STOP_ORDER runs South (F27 = 0) to North (G22 = 20)
+                    let targetSpinePosOpt =
+                        if remSec <= 8.0<seconds> then
                             Some(float nextSpineIdx)
-                        else
-                            None
+                        elif nextIdx > 0 then
+                            let prevCall = distinctCalls[nextIdx - 1]
+                            let prevSpineIdx = spineIndexByStop |> Map.tryFind prevCall.stopId |? nextSpineIdx
+                            let effDepSec = effectiveDepart (nextIdx - 1) prevCall
 
-                targetSpinePosOpt
-                |> Option.map (fun targetSpinePos ->
-                    let spinePos =
-                        match Map.tryFind trip.tripId prevPositions with
-                        | None -> targetSpinePos
-                        | Some(prevSpinePos, prevTimeSec) ->
-                            let dt = clamp 0.0<seconds> 60.0<seconds> (nowSec - prevTimeSec)
-                            let dirSign = if trip.direction = Southbound then -1.0 else 1.0
-                            let signedDelta = (targetSpinePos - prevSpinePos) * dirSign
-
-                            if signedDelta < -1.8 || signedDelta > 2.5 then
-                                targetSpinePos
-                            elif signedDelta <= 0.0 then
-                                prevSpinePos
+                            if nowSec <= effDepSec then
+                                Some(float prevSpineIdx)
                             else
-                                let maxStep =
-                                    dt
-                                    * min 0.032<1 / seconds> (0.013<1 / seconds> + 0.025<1 / seconds> * signedDelta)
+                                let p =
+                                    clamp
+                                        0.02
+                                        0.98
+                                        (smoothProgress (
+                                            (nowSec - effDepSec) / max 25.0<seconds> (nextCall.arriveSec - effDepSec)
+                                        ))
 
-                                prevSpinePos + dirSign * min signedDelta maxStep
+                                Some(float prevSpineIdx + (float nextSpineIdx - float prevSpineIdx) * p)
+                        else
+                            let upstreamSpineIdx =
+                                match trip.direction with
+                                | Northbound -> max 0 (nextSpineIdx - 1)
+                                | Southbound -> min (PREFERRED_STOP_ORDER.Length - 1) (nextSpineIdx + 1)
+                                | Other -> nextSpineIdx
 
-                    let isStopped = Math.Abs(spinePos - Math.Round(spinePos)) < 0.02
+                            if upstreamSpineIdx <> nextSpineIdx && remSec <= 150.0<seconds> then
+                                let p = clamp 0.03 0.98 (smoothProgress (1.0 - remSec / max remSec 95.0<seconds>))
+                                Some(float upstreamSpineIdx + (float nextSpineIdx - float upstreamSpineIdx) * p)
+                            elif upstreamSpineIdx = nextSpineIdx then
+                                Some(float nextSpineIdx)
+                            else
+                                None
 
-                    let trainOpt =
-                        poseAtSpinePos stopLookup trip.direction spinePos
-                        |> Option.map (fun (lat, lon, headingDeg) ->
-                            { tripId = trip.tripId
-                              direction = trip.direction
-                              latitude = lat
-                              longitude = lon
-                              spinePos = spinePos
-                              headingDeg = headingDeg
-                              isStopped = isStopped
-                              nextStopId = nextCall.stopId })
+                    targetSpinePosOpt |> Option.map (fun position -> position, nextCall.stopId))
 
-                    (trip.tripId, (spinePos, nowSec)), trainOpt)))
+            let report = trip.reportedPosition |> Option.filter (recentReport nowSec)
+
+            let targetPosition =
+                match report with
+                | None -> predictedPosition
+                | Some report ->
+                    let station = float spineIndexByStop[report.stopId]
+
+                    let upstream =
+                        match trip.direction with
+                        | Northbound -> max 0.0 (station - 1.0)
+                        | Southbound -> min (float (PREFERRED_STOP_ORDER.Length - 1)) (station + 1.0)
+                        | Other -> station
+
+                    let position =
+                        match report.status with
+                        | StoppedAt -> station
+                        | IncomingAt -> station + (upstream - station) * 0.05
+                        | InTransitTo when upstream = station -> station
+                        | InTransitTo ->
+                            let low, high = min upstream station, max upstream station
+
+                            let predicted =
+                                predictedPosition
+                                |> Option.filter (fun (_, stopId) -> stopId = report.stopId)
+                                |> Option.map (fst >> clamp (low + 0.03) (high - 0.03))
+
+                            let previous =
+                                Map.tryFind trip.tripId prevPositions
+                                |> Option.map fst
+                                |> Option.filter (fun position -> position > low && position < high)
+
+                            let target = (predicted <|> previous) |? ((upstream + station) / 2.0)
+
+                            match previous with
+                            | Some previous when trip.direction = Southbound -> min previous target
+                            | Some previous -> max previous target
+                            | None -> target
+
+                    Some(position, report.stopId)
+
+            targetPosition
+            |> Option.map (fun (targetSpinePos, nextStopId) ->
+                let spinePos =
+                    match report, Map.tryFind trip.tripId prevPositions with
+                    | Some _, _
+                    | None, None -> targetSpinePos
+                    | None, Some(prevSpinePos, prevTimeSec) ->
+                        let dt = clamp 0.0<seconds> 60.0<seconds> (nowSec - prevTimeSec)
+                        let dirSign = if trip.direction = Southbound then -1.0 else 1.0
+                        let signedDelta = (targetSpinePos - prevSpinePos) * dirSign
+
+                        if signedDelta < -1.8 || signedDelta > 2.5 then
+                            targetSpinePos
+                        elif signedDelta <= 0.0 then
+                            prevSpinePos
+                        else
+                            let maxStep =
+                                dt
+                                * min 0.032<1 / seconds> (0.013<1 / seconds> + 0.025<1 / seconds> * signedDelta)
+
+                            prevSpinePos + dirSign * min signedDelta maxStep
+
+                let isStopped =
+                    match report with
+                    | Some report -> report.status = StoppedAt
+                    | None -> Math.Abs(spinePos - Math.Round(spinePos)) < 0.02
+
+                let trainOpt =
+                    poseAtSpinePos stopLookup trip.direction spinePos
+                    |> Option.map (fun (lat, lon, headingDeg) ->
+                        { tripId = trip.tripId
+                          direction = trip.direction
+                          latitude = lat
+                          longitude = lon
+                          spinePos = spinePos
+                          headingDeg = headingDeg
+                          isStopped = isStopped
+                          nextStopId = nextStopId })
+
+                (trip.tripId, (spinePos, nowSec)), trainOpt))
 
     stepped |> Array.choose snd, stepped |> Array.map fst |> Map.ofArray
 
