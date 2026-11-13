@@ -58,10 +58,9 @@ let private selectStation (stopId: string) (model: Model) =
         lastArrivals = arrivals
         lastVisibleTotal = arrivals |> Option.map visibleTotal |? 0 }
 
-let private startTimersSub: Cmd<Msg> =
-    Cmd.ofEffect (fun dispatch ->
-        scheduleRefresh (fun () -> dispatch (RefreshFeed false)) 5000<milliseconds>
-        scheduleAgeTicker (fun () -> dispatch TickAge) 1000<milliseconds>)
+let subscriptions (_: Model) : Sub<Msg> =
+    [ [ "feed-refresh" ], every 5000<milliseconds> (RefreshFeed false)
+      [ "clock-tick" ], every 1000<milliseconds> TickAge ]
 
 // Elmish Init
 let init () : Model * Cmd<Msg> =
@@ -100,8 +99,7 @@ let init () : Model * Cmd<Msg> =
     Cmd.batch
         [ Cmd.ofEffect (fun _ -> syncStopParam selectedStopPrefix)
           geoCmd
-          Cmd.ofMsg (RefreshFeed true)
-          startTimersSub ]
+          Cmd.ofMsg (RefreshFeed true) ]
 
 // Elmish Update
 let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =

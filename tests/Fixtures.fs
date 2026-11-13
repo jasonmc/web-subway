@@ -142,7 +142,9 @@ let resetBrowser hash =
 
 [<ReactComponent>]
 let private TestApp () =
-    let model, dispatch = React.useElmish (App.init, App.update, [||])
+    let model, dispatch =
+        React.useElmish (App.init, App.update, App.subscriptions, dependencies = [||])
+
     Ui.view model dispatch
 
 let renderApp () = RTL.render (TestApp())

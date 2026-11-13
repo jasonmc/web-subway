@@ -1,15 +1,13 @@
 module Timers
 
+open System
 open Browser
+open Elmish
 open Time
 
-let private refreshTimer = ref None
-let private ageTimer = ref None
+let every (intervalMs: int<milliseconds>) (message: 'msg) : Subscribe<'msg> =
+    fun dispatch ->
+        let timer = window.setInterval ((fun () -> dispatch message), int intervalMs)
 
-let scheduleRefresh (onTick: unit -> unit) (intervalMs: int<milliseconds>) =
-    Option.iter window.clearInterval refreshTimer.Value
-    refreshTimer.Value <- Some(window.setInterval (onTick, int intervalMs))
-
-let scheduleAgeTicker (onTick: unit -> unit) (intervalMs: int<milliseconds>) =
-    Option.iter window.clearInterval ageTimer.Value
-    ageTimer.Value <- Some(window.setInterval (onTick, int intervalMs))
+        { new IDisposable with
+            member _.Dispose() = window.clearInterval timer }

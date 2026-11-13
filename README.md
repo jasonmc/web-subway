@@ -51,6 +51,8 @@ Tests follow Feliz's Vitest and React Testing Library setup, using the published
 
 `src/App.fs` holds the app's initialization and update functions; `src/Main.fs` is the browser entry point. The test project shares the app source files while excluding that entry point, so importing the code does not start a second app.
 
+`App.subscriptions` declares the five-second feed refresh and one-second clock tick with stable Elmish subscription IDs. `Timers.every` returns an `IDisposable` that clears its interval. Both the production program and the test component use those subscriptions, so model updates retain existing timers and component unmounting disposes them.
+
 `src/Time.fs` defines seconds and milliseconds as F# units of measure. Feed timestamps, train interpolation, and timer intervals retain these units internally, with explicit conversions at protobuf and JavaScript boundaries. Arrivals are UTC `DateTimeOffset` instants; countdowns and headways use elapsed `TimeSpan` values. Clock times are formatted with the browser's built-in `Intl.DateTimeFormat` in `America/New_York`, including daylight-saving changes, regardless of the device's timezone. `Time.test.fs` covers UTC construction, New York display, and elapsed time across DST transitions.
 
 `src/Geography.fs` defines distinct latitude/longitude measures in decimal degrees, plus a named coordinate record for device location. Station data, map projections, and estimated trains use these measures so swapped axes fail typechecking. The browser API still supplies raw numbers, which are assigned their coordinate roles at that boundary and checked for finite, valid ranges.

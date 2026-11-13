@@ -11,6 +11,37 @@ open Time
 Vitest.beforeEach (fun () -> resetBrowser "")
 
 Vitest.test (
+    "keeps one set of timer subscriptions and disposes them on unmount and remount",
+    fun () ->
+        promise {
+            let baseline = vi.getTimerCount ()
+            let fetch = mockFeed (trainsFeed ())
+            let app = renderApp ()
+            do! waitForArrivals ()
+            Vitest.expect(vi.getTimerCount ()).toBe (baseline + 2)
+
+            selectStation "G24"
+            RTL.fireEvent.click (RTL.screen.getByRole ("button", ByRoleOptions(name = Text "Map")))
+            do! advance 1000<milliseconds>
+            Vitest.expect(vi.getTimerCount ()).toBe (baseline + 2)
+            app.unmount ()
+            Vitest.expect(vi.getTimerCount ()).toBe baseline
+            do! advance 10000<milliseconds>
+            Vitest.expect(fetch).toHaveBeenCalledTimes 1
+
+            let remounted = renderApp ()
+            do! waitForArrivals ()
+            Vitest.expect(fetch).toHaveBeenCalledTimes 2
+            Vitest.expect(vi.getTimerCount ()).toBe (baseline + 2)
+            do! advance 5000<milliseconds>
+            do! RTL.waitFor (fun () -> Vitest.expect(fetch).toHaveBeenCalledTimes 3)
+            Vitest.expect(vi.getTimerCount ()).toBe (baseline + 2)
+            remounted.unmount ()
+            Vitest.expect(vi.getTimerCount ()).toBe baseline
+        }
+)
+
+Vitest.test (
     "shows destination headings and separates short-turn trains in the same direction",
     fun () ->
         promise {
