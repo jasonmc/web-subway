@@ -201,17 +201,18 @@ let private smoothProgress (rawP: float) : float =
     let t = clamp 0.0 1.0 rawP
     0.58 * t + 0.42 * (t * t * (3.0 - 2.0 * t))
 
+let private recentTimestamp (nowSec: float<seconds>) (timestamp: float<seconds>) =
+    timestamp >= nowSec - 300.0<seconds> && timestamp <= nowSec + 5.0<seconds>
+
 let private recentReport (nowSec: float<seconds>) (report: ReportedTrainPosition) =
-    report.observedSec >= nowSec - 300.0<seconds>
-    && report.observedSec <= nowSec + 5.0<seconds>
+    recentTimestamp nowSec report.observedSec
 
 // Extract active train trajectories along the G line, fusing TripUpdate and VehiclePosition entities
 let extractRawTrips (now: DateTimeOffset) (feed: IFeedMessage) : RawTrainTrip array =
     let nowSec = now |> instantToMilliseconds |> millisecondsToSeconds
 
-    // The vehicle timestamp records its last movement, so a stopped train can
-    // have an old timestamp in a fresh feed. Age the report using the feed itself.
-    let observedSec =
+    // A fresh feed can repeat an old vehicle observation. Check both clocks.
+    let feedSec =
         feed.header
         |> Option.bind (fun header -> toSeconds header.timestamp)
         |> Option.filter (fun timestamp -> timestamp > 0.0<seconds>)
@@ -257,16 +258,18 @@ let extractRawTrips (now: DateTimeOffset) (feed: IFeedMessage) : RawTrainTrip ar
                    | Some report -> report
                    | None -> None, None, None, None
 
-               let reportedPosition =
-                   match rawVehStopOpt, vehStatusOpt with
-                   | Some rawStop, Some status when vehSeqOpt <> Some 0 ->
+               let candidatePosition =
+                   match rawVehStopOpt, vehStatusOpt, vehTsOpt with
+                   | Some rawStop, Some status, Some timestamp when
+                       vehSeqOpt <> Some 0 && recentTimestamp nowSec feedSec
+                       ->
                        let stopId = STOP_SUFFIX_RE.Replace(rawStop, "")
 
                        if Set.contains stopId spineStopSet then
                            Some
                                { stopId = stopId
                                  status = status
-                                 observedSec = observedSec }
+                                 observedSec = timestamp }
                            |> Option.filter (recentReport nowSec)
                        else
                            None
@@ -311,7 +314,7 @@ let extractRawTrips (now: DateTimeOffset) (feed: IFeedMessage) : RawTrainTrip ar
                    |> Array.sortBy _.arriveSec
 
                let dir =
-                   (reportedPosition
+                   (candidatePosition
                     |> Option.bind (fun _ -> rawVehStopOpt |> Option.bind dirFromId))
                    <|> (spineStus
                         |> Array.choose (fun (rawId, _, _) -> dirFromId rawId)
@@ -321,11 +324,38 @@ let extractRawTrips (now: DateTimeOffset) (feed: IFeedMessage) : RawTrainTrip ar
                         else rawVehStopOpt |> Option.bind dirFromId)
                    |? baseDir
 
+               // In the G feed a last-observed STOPPED_AT report can persist
+               // after the trip update drops that station. Use the remaining
+               // stop order as departure evidence, independently of predictions.
+               let reportedPosition =
+                   candidatePosition
+                   |> Option.filter (fun report ->
+                       let remaining =
+                           spineStus
+                           |> Array.filter (fun (_, _, stu) -> toInt stu.scheduleRelationship <> Some 1.0)
+                           |> Array.map (fun (_, stopId, _) -> stopId)
+
+                       let departed =
+                           not (Array.contains report.stopId remaining)
+                           && (remaining
+                               |> Array.tryHead
+                               |> Option.exists (fun nextStop ->
+                                   let previous = spineIndexByStop[report.stopId]
+                                   let next = spineIndexByStop[nextStop]
+
+                                   match dir with
+                                   | Northbound -> next > previous
+                                   | Southbound -> next < previous
+                                   | Other -> false))
+
+                       not departed)
+
                // Prepend upstream VehiclePosition stop when MTA has already dropped it from stopTimeUpdate
                let calls =
                    match rawVehStopOpt |> Option.map (fun s -> STOP_SUFFIX_RE.Replace(s, "")), vehTsOpt with
                    | Some vStop, Some vTs when
                        stuCalls.Length > 0
+                       && Option.isSome candidatePosition
                        && vTs >= nowSec - 300.0<seconds>
                        && vTs <= nowSec + 5.0<seconds>
                        && vTs < stuCalls[0].arriveSec

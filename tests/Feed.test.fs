@@ -10,6 +10,105 @@ open Geography
 
 Vitest.beforeEach (fun () -> resetBrowser "")
 
+Vitest.test (
+    "a stopped report becomes a departure anchor when its station leaves the remaining stops",
+    fun () ->
+        let _, lookup, _, _, _ = Stops.initStops ()
+
+        let stoppedFeed =
+            encode
+                [| trip "moving" "moving" 0 [| call "G26N" -18.0<seconds>; call "G24N" 87.0<seconds> |]
+                   vehicle "position" "moving" "G26N" 1 1 -18.0<seconds> |]
+            |> decodeFeed
+
+        let stopped, positions =
+            estimateTrainPositions fixedNowSec lookup Map.empty (extractRawTrips fixedNow stoppedFeed)
+
+        Vitest.expect(stopped[0].isStopped).toBe true
+        Vitest.expect(stopped[0].spinePos).toBeCloseTo 18.0
+
+        // The same last-observed vehicle report remains after the trip update drops G26.
+        let departedFeed =
+            encodeAt
+                (fixedNowSec + 25.0<seconds>)
+                [| trip "moving" "moving" 0 [| call "G24N" 87.0<seconds>; call "G22N" 200.0<seconds> |]
+                   vehicle "position" "moving" "G26N" 1 1 -18.0<seconds> |]
+            |> decodeFeed
+
+        let later = fixedNow.AddSeconds 25.0
+
+        let moving, _ =
+            estimateTrainPositions (fixedNowSec + 25.0<seconds>) lookup positions (extractRawTrips later departedFeed)
+
+        Vitest.expect(moving[0].isStopped).toBe false
+        Vitest.expect(moving[0].nextStopId).toBe "G24"
+        Vitest.expect(moving[0].spinePos).toBeGreaterThan 18.0
+        Vitest.expect(moving[0].spinePos).toBeLessThan 19.0
+)
+
+for timestamp in [ -600.0<seconds>; 600.0<seconds> ] do
+    Vitest.test (
+        $"a fresh feed does not validate a vehicle timestamp offset by {timestamp} seconds",
+        fun () ->
+            let feed =
+                encode
+                    [| trip "predictions" "reported" 0 [| call "G28N" -30.0<seconds>; call "G26N" 90.0<seconds> |]
+                       vehicle "position" "reported" "G24N" 1 1 timestamp |]
+                |> decodeFeed
+
+            let _, lookup, _, _, _ = Stops.initStops ()
+
+            let trains, _ =
+                estimateTrainPositions fixedNowSec lookup Map.empty (extractRawTrips fixedNow feed)
+
+            Vitest.expect(trains[0].nextStopId).toBe "G26"
+            Vitest.expect(trains[0].spinePos).toBeLessThan 18.0
+    )
+
+Vitest.test (
+    "a vehicle report without a measurement timestamp falls back to predictions",
+    fun () ->
+        let feed =
+            encode
+                [| trip "predictions" "reported" 0 [| call "G28N" -30.0<seconds>; call "G26N" 90.0<seconds> |]
+                   box
+                       {| id = "position"
+                          vehicle =
+                           {| trip = {| tripId = "reported" |}
+                              stopId = "G24N"
+                              currentStatus = 1
+                              currentStopSequence = 1 |} |} |]
+            |> decodeFeed
+
+        let _, lookup, _, _, _ = Stops.initStops ()
+
+        let trains, _ =
+            estimateTrainPositions fixedNowSec lookup Map.empty (extractRawTrips fixedNow feed)
+
+        Vitest.expect(trains[0].nextStopId).toBe "G26"
+        Vitest.expect(trains[0].spinePos).toBeLessThan 18.0
+)
+
+Vitest.test (
+    "cached vehicle reports expire from their measurement time rather than the feed header",
+    fun () ->
+        let feed =
+            encode
+                [| trip "expired-times" "reported" 0 [| call "G26N" -3600.0<seconds>; call "G22N" -3300.0<seconds> |]
+                   vehicle "position" "reported" "G24N" 1 1 -290.0<seconds> |]
+            |> decodeFeed
+
+        let _, lookup, _, _, _ = Stops.initStops ()
+        let trips = extractRawTrips fixedNow feed
+        let initial, positions = estimateTrainPositions fixedNowSec lookup Map.empty trips
+        Vitest.expect(initial.Length).toBe 1
+
+        let expired, _ =
+            estimateTrainPositions (fixedNowSec + 11.0<seconds>) lookup positions trips
+
+        Vitest.expect(expired.Length).toBe 0
+)
+
 for status, expectedPosition, stopped in [ 0, 18.95, false; 1, 19.0, true; 2, 18.5, false ] do
     Vitest.test (
         $"vehicle status {status} takes priority over predictions an hour in the future",
@@ -17,7 +116,7 @@ for status, expectedPosition, stopped in [ 0, 18.95, false; 1, 19.0, true; 2, 18
             let feed =
                 encode
                     [| trip "wrong-times" "reported" 0 [| call "G29N" 3600.0<seconds>; call "G28N" 3700.0<seconds> |]
-                       vehicle "position" "reported" "G24N" status 1 -1200.0<seconds> |]
+                       vehicle "position" "reported" "G24N" status 1 -30.0<seconds> |]
                 |> decodeFeed
 
             let _, lookup, _, _, _ = Stops.initStops ()
@@ -35,7 +134,7 @@ Vitest.test (
         let feed =
             encode
                 [| trip "wrong-times" "stopped" 0 [| call "G26N" -3600.0<seconds>; call "G22N" -3300.0<seconds> |]
-                   vehicle "position" "stopped" "G24N" 1 1 -1200.0<seconds> |]
+                   vehicle "position" "stopped" "G24N" 1 1 -30.0<seconds> |]
             |> decodeFeed
 
         let _, lookup, _, _, _ = Stops.initStops ()

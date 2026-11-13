@@ -443,7 +443,8 @@ Vitest.test (
             Vitest.expect(document.querySelector ".osm-train[data-trip-id='999_G..S']").toBeNull ()
             Vitest.expect(north.querySelector "svg").toHaveClass "osm-train-svg"
             Vitest.expect(north.getAttribute "data-heading").toMatch (Text.RegularExpressions.Regex "^-?\\d")
-            Vitest.expect(RTL.screen.getByText "At Court Sq · 2 stops away").toBeInTheDocument ()
+            // Court Sq is the last observation; the remaining stops show the train has departed.
+            Vitest.expect(RTL.screen.getByText "Approaching 21 St · 2 stops away").toBeInTheDocument ()
             let latitudeBefore = float (north.getAttribute "data-lat")
             Vitest.expect(latitudeBefore).toBeGreaterThan 40.724635
             Vitest.expect(latitudeBefore).toBeLessThan 40.731352
