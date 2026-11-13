@@ -78,9 +78,9 @@ Vitest.test (
             // Station selection and refreshes must not switch the view back.
             RTL.fireEvent.click (document.querySelector "[data-stop-id='G24']" :?> Browser.Types.HTMLElement)
             do! RTL.waitFor (fun () -> Vitest.expect(stationSelect ()).toHaveValue "G24")
-            do! RTL.waitFor (fun () -> Vitest.expect(fetch).toHaveBeenCalledTimes 2)
+            Vitest.expect(fetch).toHaveBeenCalledTimes 1
             do! advance 5000<milliseconds>
-            do! RTL.waitFor (fun () -> Vitest.expect(fetch).toHaveBeenCalledTimes 3)
+            do! RTL.waitFor (fun () -> Vitest.expect(fetch).toHaveBeenCalledTimes 2)
             Vitest.expect(arrivalsColumn).toHaveClass "is-hidden-mobile"
             Vitest.expect(mapColumn.classList.contains "is-hidden-mobile").toBe false
 
@@ -90,7 +90,7 @@ Vitest.test (
             Vitest.expect(arrivals).toHaveAttribute ("aria-pressed", "true")
             Vitest.expect(stationSelect ()).toHaveValue "G24"
             Vitest.expect(window.location.hash).toBe "#G24"
-            Vitest.expect(fetch).toHaveBeenCalledTimes 3
+            Vitest.expect(fetch).toHaveBeenCalledTimes 2
         }
 )
 
@@ -188,7 +188,7 @@ for latitude, longitude, id, name, hash in
 
                 RTL.act (fun () -> locate.Value(position latitude longitude))
                 do! RTL.waitFor (fun () -> Vitest.expect(stationSelect ()).toHaveValue id)
-                do! RTL.waitFor (fun () -> Vitest.expect(fetch).toHaveBeenCalledTimes 2)
+                Vitest.expect(fetch).toHaveBeenCalledTimes 1
                 Vitest.expect(stationSelect ()).toHaveDisplayValue name
                 Vitest.expect(window.location.hash).toBe ("#" + id)
                 Vitest.expect(RTL.screen.getByText "No arrivals in the feed.").toBeInTheDocument ()
@@ -232,12 +232,12 @@ Vitest.test (
             renderApp () |> ignore
             do! waitForArrivals ()
             selectStation "G24"
-            do! RTL.waitFor (fun () -> Vitest.expect(fetch).toHaveBeenCalledTimes 2)
+            Vitest.expect(fetch).toHaveBeenCalledTimes 1
             RTL.act (fun () -> locate.Value(position 40.746554 -73.943832))
             do! RTL.waitFor (fun () -> Vitest.expect(document.querySelector ".osm-user-location").toBeInTheDocument ())
             Vitest.expect(stationSelect ()).toHaveValue "G24"
             Vitest.expect(window.location.hash).toBe "#G24"
-            Vitest.expect(fetch).toHaveBeenCalledTimes 2
+            Vitest.expect(fetch).toHaveBeenCalledTimes 1
         }
 )
 

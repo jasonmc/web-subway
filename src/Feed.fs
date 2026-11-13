@@ -543,9 +543,7 @@ let headway (current: Arrival) (next: Arrival option) : string =
         | _ -> ""
     | None -> ""
 
-let parseFeed (feed: IFeedMessage) (stopIdPrefix: string) : ArrivalGroup * FeedMeta =
-    let currentNow = DateTimeOffset.UtcNow
-
+let private parseArrivals (feed: IFeedMessage) =
     let headerTimestampMs =
         feed.header
         |> Option.bind (fun h -> toSeconds h.timestamp)
@@ -581,20 +579,25 @@ let parseFeed (feed: IFeedMessage) (stopIdPrefix: string) : ArrivalGroup * FeedM
 
                    for stu in (tu.stopTimeUpdate |? [||]) do
                        match stu.stopId with
-                       | Some stopId when stopId.StartsWith(stopIdPrefix) && toInt stu.scheduleRelationship <> Some 1.0 ->
+                       | Some stopId when
+                           not (String.IsNullOrWhiteSpace stopId)
+                           && toInt stu.scheduleRelationship <> Some 1.0
+                           ->
                            match stu.arrival, stu.departure with
                            | EventTime ts, _
                            | _, EventTime ts ->
                                let whenDate = instantFromSeconds ts
+                               let stationId = STOP_SUFFIX_RE.Replace(stopId, "")
 
                                // The arrival board is for boarding: omit trips
                                // ending here, including temporary short turns.
-                               if whenDate >= currentNow && destination <> Some stopIdPrefix then
+                               if destination <> Some stationId then
                                    let dir =
                                        if stopId.EndsWith("N") then Northbound
                                        elif stopId.EndsWith("S") then Southbound
                                        else baseDir
 
+                                   stationId,
                                    { time = whenDate
                                      route = route
                                      direction = dir
@@ -602,12 +605,37 @@ let parseFeed (feed: IFeedMessage) (stopIdPrefix: string) : ArrivalGroup * FeedM
                                      destinationStopId = destination }
                            | _ -> ()
                        | _ -> () |]
-        |> Array.sortBy _.time
+        |> Array.groupBy fst
+        |> Array.map (fun (stopId, rows) -> stopId, rows |> Array.map snd |> Array.sortBy _.time)
+        |> Map.ofArray
+
+    allArrivals, { headerTimestampMs = headerTimestampMs }
+
+let private selectArrivals (arrivalsByStop: Map<string, Arrival array>) (stopId: string) : ArrivalGroup =
+    let now = DateTimeOffset.UtcNow
+
+    let arrivals =
+        Map.tryFind stopId arrivalsByStop |? [||]
+        |> Array.filter (fun a -> a.time >= now)
 
     let byDir d =
-        allArrivals |> Array.filter (fun a -> a.direction = d)
+        arrivals |> Array.filter (fun a -> a.direction = d)
 
     { Northbound = byDir Northbound
       Southbound = byDir Southbound
-      Other = byDir Other },
-    { headerTimestampMs = headerTimestampMs }
+      Other = byDir Other }
+
+let parseFeed (feed: IFeedMessage) (stopId: string) : ArrivalGroup * FeedMeta =
+    let arrivals, meta = parseArrivals feed
+    selectArrivals arrivals stopId, meta
+
+let parseSnapshot (feed: IFeedMessage) : FeedSnapshot =
+    let arrivals, meta = parseArrivals feed
+
+    { availableStops = stopsInFeed feed
+      arrivalsByStop = arrivals
+      meta = meta
+      rawTrips = extractRawTrips feed }
+
+let arrivalsForStop (feed: FeedSnapshot) (stopId: string) : ArrivalGroup =
+    selectArrivals feed.arrivalsByStop stopId

@@ -41,6 +41,9 @@ let private useTestClock (window: IWindow) : unit = jsNative
 [<Emit("Object.defineProperty($0.navigator, 'geolocation', { configurable: true, value: $1 })")>]
 let private setGeolocation (window: IWindow) (geolocation: obj) : unit = jsNative
 
+[<Emit("new Promise($0)")>]
+let private pendingResponse (saveResolver: (App.IResponse -> unit) -> unit) : JS.Promise<App.IResponse> = jsNative
+
 type private BundlePage(dom: IDom) =
     member _.Advance(duration: int<milliseconds>) =
         vi.advanceTimersByTimeAsync (int duration)
@@ -191,7 +194,7 @@ Vitest.test (
             Vitest.expect(geoRequests).toBe 0
 
             page.SelectStation "G24"
-            do! page.WaitFor(fun () -> Vitest.expect(fetch).toHaveBeenCalledTimes 2)
+            Vitest.expect(fetch).toHaveBeenCalledTimes 1
 
             do!
                 page.WaitFor(fun () ->
@@ -203,7 +206,7 @@ Vitest.test (
             Vitest.expect(page.Query "h2[aria-label='Northbound to 21 St']").toBeNull ()
 
             page.SelectStation "G22"
-            do! page.WaitFor(fun () -> Vitest.expect(fetch).toHaveBeenCalledTimes 3)
+            Vitest.expect(fetch).toHaveBeenCalledTimes 1
 
             do!
                 page.WaitFor(fun () ->
@@ -213,6 +216,66 @@ Vitest.test (
             Vitest.expect(page.Query("#lists").querySelectorAll(".arrival").length).toBe 1
             Vitest.expect(page.Query "h2[aria-label='Southbound to Church Av']").toHaveTextContent "Church Av"
             Vitest.expect(page.Query "#stop-select").toHaveValue "G22"
+        }
+)
+
+Vitest.test (
+    "the production bundle never shows default-station arrivals after startup geolocation selects Court Sq",
+    fun () ->
+        promise {
+            let buffer =
+                encode
+                    [| trip "north" "north" 0 [| call "G26N" 120.0<seconds>; call "G22N" 360.0<seconds> |]
+                       trip
+                           "south"
+                           "south"
+                           1
+                           [| call "G22S" 60.0<seconds>
+                              call "G26S" 420.0<seconds>
+                              call "F27S" 1800.0<seconds> |] |]
+
+            let mutable completeFirstFetch: (App.IResponse -> unit) option = None
+
+            let firstResponse =
+                pendingResponse (fun resolve -> completeFirstFetch <- Some resolve)
+
+            let mutable requests = 0
+
+            let fetch =
+                vi.fn (fun (_: string) ->
+                    requests <- requests + 1
+
+                    if requests = 1 then
+                        firstResponse
+                    else
+                        JS.Constructors.Promise.resolve (response buffer 200))
+
+            let mutable locate: GeoSuccess option = None
+            use page = startBundle "" fetch (Some(fun success _ _ -> locate <- Some success))
+
+            do!
+                vi.waitFor (fun () ->
+                    Vitest.expect(requests).toBe 1
+                    Vitest.expect(completeFirstFetch.IsSome && locate.IsSome).toBe true)
+
+            // The default station's response is still pending when Chrome
+            // supplies a position nearest Court Sq.
+            locate.Value(position 40.746554 -73.943832)
+            do! vi.waitFor (fun () -> Vitest.expect(page.Query "#stop-select").toHaveValue "G22")
+            completeFirstFetch.Value(response buffer 200)
+
+            do!
+                page.WaitFor(fun () ->
+                    Vitest.expect(page.Query "[data-stop-id='G22']").toHaveClass "osm-stop-selected"
+                    Vitest.expect(page.Query "#lists .arrival").toBeInTheDocument ())
+
+            // The first response must use the current station without waiting
+            // for another request or the next scheduled poll.
+            Vitest.expect(page.Query "h2[aria-label='Northbound to Court Sq']").toBeNull ()
+            Vitest.expect(page.Query "h2[aria-label='Southbound to Church Av']").toBeInTheDocument ()
+            Vitest.expect(page.Query("#lists").querySelectorAll(".arrival").length).toBe 1
+            Vitest.expect(page.Query "#stop-select").toHaveValue "G22"
+            Vitest.expect(requests).toBe 1
         }
 )
 
@@ -230,12 +293,12 @@ Vitest.test (
             do! page.WaitFor(fun () -> Vitest.expect(page.Query "#lists .arrival").toBeInTheDocument ())
             do! page.WaitFor(fun () -> Vitest.expect(locate.IsSome).toBe true)
             page.SelectStation "G24"
-            do! page.WaitFor(fun () -> Vitest.expect(fetch).toHaveBeenCalledTimes 2)
+            Vitest.expect(fetch).toHaveBeenCalledTimes 1
             locate.Value(position 40.746554 -73.943832)
             do! page.WaitFor(fun () -> Vitest.expect(page.Query ".osm-user-location").toBeInTheDocument ())
             Vitest.expect(page.Query "#stop-select").toHaveValue "G24"
             Vitest.expect(page.Hash).toBe "#G24"
-            Vitest.expect(fetch).toHaveBeenCalledTimes 2
+            Vitest.expect(fetch).toHaveBeenCalledTimes 1
         }
 )
 

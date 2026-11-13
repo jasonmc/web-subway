@@ -25,10 +25,7 @@ let private envFeedUrl: string option = jsNative
 [<Emit("fetch($0, { mode: 'cors' })")>]
 let private fetchCors (url: string) : JS.Promise<IResponse> = jsNative
 
-let private fetchAndParse
-    (stopIdPrefix: string)
-    ()
-    : Async<Set<string> * ArrivalGroup * FeedMeta * RawTrainTrip array> =
+let private fetchSnapshot () : Async<FeedSnapshot> =
     async {
         let! res = Async.AwaitPromise(fetchCors (envFeedUrl |? DEFAULT_FEED_URL))
 
@@ -36,11 +33,7 @@ let private fetchAndParse
             return failwith $"Request failed: {res.status} {res.statusText}"
 
         let! buf = Async.AwaitPromise(res.arrayBuffer ())
-        let feed = decodeFeed buf
-        let available = stopsInFeed feed
-        let arrivals, meta = parseFeed feed stopIdPrefix
-        let rawTrips = extractRawTrips feed
-        return available, arrivals, meta, rawTrips
+        return decodeFeed buf |> parseSnapshot
     }
 
 let private recomputeTrains
@@ -51,8 +44,19 @@ let private recomputeTrains
     : EstimatedTrain array * Map<string, float * float<seconds>> =
     estimateTrainPositions (effectiveNowSec headerTimestampMs) stopLookup prevPositions rawTrips
 
-let private startRefreshSub: Cmd<Msg> =
-    Cmd.ofEffect (fun dispatch -> scheduleRefresh (fun () -> dispatch (RefreshFeed false)) 5000<milliseconds>)
+let private visibleTotal (arrivals: ArrivalGroup) =
+    min arrivals.Northbound.Length ARRIVALS_PER_DIRECTION
+    + min arrivals.Southbound.Length ARRIVALS_PER_DIRECTION
+    + min arrivals.Other.Length ARRIVALS_PER_DIRECTION
+
+let private selectStation (stopId: string) (model: Model) =
+    let arrivals =
+        model.lastFeed |> Option.map (fun feed -> arrivalsForStop feed stopId)
+
+    { model with
+        selectedStopPrefix = stopId
+        lastArrivals = arrivals
+        lastVisibleTotal = arrivals |> Option.map visibleTotal |? 0 }
 
 let private startTimersSub: Cmd<Msg> =
     Cmd.ofEffect (fun dispatch ->
@@ -73,6 +77,7 @@ let init () : Model * Cmd<Msg> =
           manuallySelected = false
           fetching = false
           availableStops = None
+          lastFeed = None
           lastArrivals = None
           lastFeedMeta = None
           lastFeedTimestampMs = None
@@ -104,19 +109,13 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
     | SelectMobileView view -> { model with mobileView = view }, Cmd.none
 
     | SelectStop stopId ->
-        { model with
-            selectedStopPrefix = stopId
-            manuallySelected = true },
-        Cmd.batch
-            [ Cmd.ofEffect (fun _ -> syncStopParam stopId)
-              Cmd.ofMsg (RefreshFeed true)
-              startRefreshSub ]
+        { model with manuallySelected = true } |> selectStation stopId, Cmd.ofEffect (fun _ -> syncStopParam stopId)
 
     | GeoResolved(Some(stopId, coords)) when not model.manuallySelected && not model.hasUrlStop ->
         { model with
-            selectedStopPrefix = stopId
-            userLocation = Some coords },
-        Cmd.batch [ Cmd.ofEffect (fun _ -> syncStopParam stopId); Cmd.ofMsg (RefreshFeed false) ]
+            userLocation = Some coords }
+        |> selectStation stopId,
+        Cmd.ofEffect (fun _ -> syncStopParam stopId)
 
     | GeoResolved(Some(_, coords)) ->
         { model with
@@ -133,7 +132,7 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
         { model with
             fetching = true
             status = nextStatus },
-        Cmd.OfAsync.either (fetchAndParse model.selectedStopPrefix) () (Ok >> FeedLoaded) (fun ex ->
+        Cmd.OfAsync.either fetchSnapshot () (Ok >> FeedLoaded) (fun ex ->
             JS.console.error ex
 
             let msg =
@@ -144,29 +143,28 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
 
             Error msg |> FeedLoaded)
 
-    | FeedLoaded(Ok(available, arrivals, meta, rawTrips)) ->
+    | FeedLoaded(Ok feed) ->
+        let arrivals = arrivalsForStop feed model.selectedStopPrefix
+        let meta = feed.meta
+
         let nextAvailable =
-            if Set.isEmpty available then
+            if Set.isEmpty feed.availableStops then
                 model.availableStops
             else
-                Some available
-
-        let visibleTotal =
-            min arrivals.Northbound.Length ARRIVALS_PER_DIRECTION
-            + min arrivals.Southbound.Length ARRIVALS_PER_DIRECTION
-            + min arrivals.Other.Length ARRIVALS_PER_DIRECTION
+                Some feed.availableStops
 
         let nextMapTrains, nextSpinePositions =
-            recomputeTrains meta.headerTimestampMs model.stopLookup model.spinePosByTrip rawTrips
+            recomputeTrains meta.headerTimestampMs model.stopLookup model.spinePosByTrip feed.rawTrips
 
         { model with
             fetching = false
             availableStops = nextAvailable
+            lastFeed = Some feed
             lastArrivals = Some arrivals
             lastFeedMeta = Some meta
             lastFeedTimestampMs = meta.headerTimestampMs
-            lastVisibleTotal = visibleTotal
-            rawTrips = rawTrips
+            lastVisibleTotal = visibleTotal arrivals
+            rawTrips = feed.rawTrips
             spinePosByTrip = nextSpinePositions
             mapTrains = nextMapTrains
             status = FeedAge meta.headerTimestampMs },

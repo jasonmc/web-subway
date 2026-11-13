@@ -40,6 +40,12 @@ type RawTrainTrip =
       direction: Direction
       calls: TrainStopCall array }
 
+type FeedSnapshot =
+    { availableStops: Set<string>
+      arrivalsByStop: Map<string, Arrival array>
+      meta: FeedMeta
+      rawTrips: RawTrainTrip array }
+
 type EstimatedTrain =
     { tripId: string
       direction: Direction
@@ -69,6 +75,7 @@ type Model =
       manuallySelected: bool
       fetching: bool
       availableStops: Set<string> option
+      lastFeed: FeedSnapshot option
       lastArrivals: ArrivalGroup option
       lastFeedMeta: FeedMeta option
       lastFeedTimestampMs: float<milliseconds> option
@@ -87,7 +94,7 @@ type Msg =
     | SelectStop of stopId: string
     | GeoResolved of (string * Coordinates) option
     | RefreshFeed of showLoading: bool
-    | FeedLoaded of Result<Set<string> * ArrivalGroup * FeedMeta * RawTrainTrip array, string>
+    | FeedLoaded of Result<FeedSnapshot, string>
     | SetSpotlight of string option
     | ToggleSpotlight of string
     | TickAge

@@ -43,6 +43,22 @@ Vitest.test (
 )
 
 Vitest.test (
+    "selects another station from the cached feed and omits arrivals that have passed",
+    fun () ->
+        let snapshot = parseSnapshot (decodeFeed (trainsFeed ()))
+        let initial = arrivalsForStop snapshot "G26"
+        Vitest.expect(initial.Northbound.Length).toBe 1
+        vi.setSystemTime ((instantFromMilliseconds (fixedNowMs + 120000.0<milliseconds>)).UtcDateTime)
+        let current = arrivalsForStop snapshot "G26"
+        Vitest.expect(current.Northbound.Length).toBe 0
+        Vitest.expect(current.Southbound.Length).toBe 1
+        let otherStation = arrivalsForStop snapshot "G24"
+        Vitest.expect(otherStation.Northbound.Length).toBe 1
+        Vitest.expect(otherStation.Northbound[0].destinationStopId).toEqual (Some "G22")
+        Vitest.expect(otherStation.Southbound.Length).toBe 0
+)
+
+Vitest.test (
     "takes each trip's destination from its final stop, including short turns and reroutes",
     fun () ->
         let feed =
