@@ -23,6 +23,13 @@ let instantFromMilliseconds (value: float<milliseconds>) : DateTimeOffset =
 let instantFromSeconds (value: float<seconds>) : DateTimeOffset =
     value |> secondsToMilliseconds |> instantFromMilliseconds
 
+let instantToMilliseconds (instant: DateTimeOffset) : float<milliseconds> =
+    float (instant.ToUnixTimeMilliseconds())
+    |> LanguagePrimitives.FloatWithMeasure<milliseconds>
+
+let nowInstant () : DateTimeOffset =
+    nowMilliseconds () |> instantFromMilliseconds
+
 type private IClockFormatter =
     abstract format: unixMilliseconds: float -> string
 

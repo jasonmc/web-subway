@@ -13,7 +13,7 @@ Vitest.beforeEach (fun () -> resetBrowser "")
 Vitest.test (
     "decodes a protobuf feed and groups only the selected station's arrivals",
     fun () ->
-        let arrivals, meta = parseFeed (decodeFeed (arrivalsFeed ())) "G26"
+        let arrivals, meta = parseFeed fixedNow (decodeFeed (arrivalsFeed ())) "G26"
         Vitest.expect(arrivals.Northbound.Length).toBe 2
         Vitest.expect(arrivals.Southbound.Length).toBe 1
         Vitest.expect(arrivals.Other.Length).toBe 0
@@ -34,9 +34,9 @@ Vitest.test (
     "uses stop and trip directions when directionId disagrees",
     fun () ->
         let feed = decodeFeed (trainsFeed ())
-        let arrivals, _ = parseFeed feed "G26"
+        let arrivals, _ = parseFeed fixedNow feed "G26"
         Vitest.expect(arrivals.Southbound |> Array.map _.tripId).toEqual [| Some "123_G..S" |]
-        let trips = extractRawTrips feed
+        let trips = extractRawTrips fixedNow feed
         let south = trips |> Array.find (fun trip -> trip.tripId = "123_G..S")
         Vitest.expect(south.direction).toEqual Southbound
         Vitest.expect(trips |> Array.exists (fun trip -> trip.tripId = "999_G..S")).toBe false
@@ -45,14 +45,14 @@ Vitest.test (
 Vitest.test (
     "selects another station from the cached feed and omits arrivals that have passed",
     fun () ->
-        let snapshot = parseSnapshot (decodeFeed (trainsFeed ()))
-        let initial = arrivalsForStop snapshot "G26"
+        let snapshot = parseSnapshot fixedNow (decodeFeed (trainsFeed ()))
+        let initial = arrivalsForStop fixedNow snapshot "G26"
         Vitest.expect(initial.Northbound.Length).toBe 1
-        vi.setSystemTime ((instantFromMilliseconds (fixedNowMs + 120000.0<milliseconds>)).UtcDateTime)
-        let current = arrivalsForStop snapshot "G26"
+        let later = instantFromMilliseconds (fixedNowMs + 120000.0<milliseconds>)
+        let current = arrivalsForStop later snapshot "G26"
         Vitest.expect(current.Northbound.Length).toBe 0
         Vitest.expect(current.Southbound.Length).toBe 1
-        let otherStation = arrivalsForStop snapshot "G24"
+        let otherStation = arrivalsForStop later snapshot "G24"
         Vitest.expect(otherStation.Northbound.Length).toBe 1
         Vitest.expect(otherStation.Northbound[0].destinationStopId).toEqual (Some "G22")
         Vitest.expect(otherStation.Southbound.Length).toBe 0
@@ -68,7 +68,7 @@ Vitest.test (
                    trip "reroute" "reroute" 1 [| call "G26S" 240.0<seconds>; call "A42S" 900.0<seconds> |] |]
             |> decodeFeed
 
-        let arrivals, _ = parseFeed feed "G26"
+        let arrivals, _ = parseFeed fixedNow feed "G26"
         Vitest.expect(arrivals.Northbound |> Array.map _.destinationStopId).toEqual [| Some "G22"; Some "G24" |]
         Vitest.expect(arrivals.Southbound[0].destinationStopId).toEqual (Some "A42")
 )
@@ -99,12 +99,12 @@ for station, terminalPlatform, departingPlatform, onwardPlatform, inboundDirecti
                               box (call onwardPlatform 360.0<seconds>) |] |]
                 |> decodeFeed
 
-            let arrivals, _ = parseFeed feed station
+            let arrivals, _ = parseFeed fixedNow feed station
             let all = Array.concat [ arrivals.Northbound; arrivals.Southbound; arrivals.Other ]
             Vitest.expect(all |> Array.map _.tripId).toEqual [| Some "departing" |]
             Vitest.expect(all[0].time).toEqual (instantFromSeconds (fixedNowSec + 180.0<seconds>))
             // The terminating trip is still useful at an earlier boarding stop.
-            let upstream, _ = parseFeed feed "G26"
+            let upstream, _ = parseFeed fixedNow feed "G26"
 
             let upstreamTrips =
                 Array.concat [ upstream.Northbound; upstream.Southbound; upstream.Other ]
@@ -139,7 +139,7 @@ Vitest.test (
                           box (call "G22N" 420.0<seconds>) |] |]
             |> decodeFeed
 
-        let arrivals, _ = parseFeed feed "G26"
+        let arrivals, _ = parseFeed fixedNow feed "G26"
         Vitest.expect(arrivals.Northbound.Length).toBe 2
         Vitest.expect(arrivals.Northbound |> Array.map _.destinationStopId).toEqual [| Some "G22"; Some "G24" |]
 )
@@ -148,7 +148,7 @@ Vitest.test (
     "interpolates between stations and keeps a moving train progressing forward",
     fun () ->
         let _, lookup, _, _, _ = Stops.initStops ()
-        let trips = extractRawTrips (decodeFeed (trainsFeed ()))
+        let trips = extractRawTrips fixedNow (decodeFeed (trainsFeed ()))
         let initial, positions = estimateTrainPositions fixedNowSec lookup Map.empty trips
         let north = initial |> Array.find (fun train -> train.tripId = "G-N-1")
         Vitest.expect(north.latitude).toBeGreaterThan 40.724635
@@ -180,7 +180,9 @@ for seconds, expected in
     Vitest.test (
         $"formats an arrival {seconds} seconds away as {expected}",
         fun () ->
-            Vitest.expect(formatRelative (instantFromMilliseconds (fixedNowMs + secondsToMilliseconds seconds))).toBe
+            Vitest
+                .expect(formatRelative fixedNow (instantFromMilliseconds (fixedNowMs + secondsToMilliseconds seconds)))
+                .toBe
                 expected
     )
 
@@ -195,8 +197,8 @@ Vitest.test (
 )
 
 Vitest.test (
-    "uses the JavaScript clock in seconds for train estimation",
-    fun () -> Vitest.expect(effectiveNowSec (Some fixedNowMs)).toEqual fixedNowSec
+    "uses the supplied instant in seconds for train estimation",
+    fun () -> Vitest.expect(effectiveNowSec fixedNow (Some fixedNowMs)).toEqual fixedNowSec
 )
 
 Vitest.test (

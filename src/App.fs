@@ -25,7 +25,7 @@ let private envFeedUrl: string option = jsNative
 [<Emit("fetch($0, { mode: 'cors' })")>]
 let private fetchCors (url: string) : JS.Promise<IResponse> = jsNative
 
-let private fetchSnapshot () : Async<FeedSnapshot> =
+let private fetchSnapshot () : Async<DateTimeOffset * FeedSnapshot> =
     async {
         let! res = Async.AwaitPromise(fetchCors (envFeedUrl |? DEFAULT_FEED_URL))
 
@@ -33,16 +33,18 @@ let private fetchSnapshot () : Async<FeedSnapshot> =
             return failwith $"Request failed: {res.status} {res.statusText}"
 
         let! buf = Async.AwaitPromise(res.arrayBuffer ())
-        return decodeFeed buf |> parseSnapshot
+        let now = nowInstant ()
+        return now, decodeFeed buf |> parseSnapshot now
     }
 
 let private recomputeTrains
+    (now: DateTimeOffset)
     (headerTimestampMs: float<milliseconds> option)
     (stopLookup: Map<string, StopOption>)
     (prevPositions: Map<string, float * float<seconds>>)
     (rawTrips: RawTrainTrip array)
     : EstimatedTrain array * Map<string, float * float<seconds>> =
-    estimateTrainPositions (effectiveNowSec headerTimestampMs) stopLookup prevPositions rawTrips
+    estimateTrainPositions (effectiveNowSec now headerTimestampMs) stopLookup prevPositions rawTrips
 
 let private visibleTotal (arrivals: ArrivalGroup) =
     min arrivals.Northbound.Length ARRIVALS_PER_DIRECTION
@@ -51,7 +53,7 @@ let private visibleTotal (arrivals: ArrivalGroup) =
 
 let private selectStation (stopId: string) (model: Model) =
     let arrivals =
-        model.lastFeed |> Option.map (fun feed -> arrivalsForStop feed stopId)
+        model.lastFeed |> Option.map (fun feed -> arrivalsForStop model.now feed stopId)
 
     { model with
         selectedStopPrefix = stopId
@@ -59,8 +61,8 @@ let private selectStation (stopId: string) (model: Model) =
         lastVisibleTotal = arrivals |> Option.map visibleTotal |? 0 }
 
 let subscriptions (_: Model) : Sub<Msg> =
-    [ [ "feed-refresh" ], every 5000<milliseconds> (RefreshFeed false)
-      [ "clock-tick" ], every 1000<milliseconds> TickAge ]
+    [ [ "feed-refresh" ], every 5000<milliseconds> (fun () -> RefreshFeed false)
+      [ "clock-tick" ], every 1000<milliseconds> (fun () -> Tick(nowInstant ())) ]
 
 // Elmish Init
 let init () : Model * Cmd<Msg> =
@@ -68,7 +70,8 @@ let init () : Model * Cmd<Msg> =
         initStops ()
 
     let model =
-        { stopOptions = stopOptions
+        { now = nowInstant ()
+          stopOptions = stopOptions
           stopLookup = stopLookup
           defaultStop = defaultStop
           selectedStopPrefix = selectedStopPrefix
@@ -141,8 +144,8 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
 
             Error msg |> FeedLoaded)
 
-    | FeedLoaded(Ok feed) ->
-        let arrivals = arrivalsForStop feed model.selectedStopPrefix
+    | FeedLoaded(Ok(now, feed)) ->
+        let arrivals = arrivalsForStop now feed model.selectedStopPrefix
         let meta = feed.meta
 
         let nextAvailable =
@@ -152,9 +155,10 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
                 Some feed.availableStops
 
         let nextMapTrains, nextSpinePositions =
-            recomputeTrains meta.headerTimestampMs model.stopLookup model.spinePosByTrip feed.rawTrips
+            recomputeTrains now meta.headerTimestampMs model.stopLookup model.spinePosByTrip feed.rawTrips
 
         { model with
+            now = now
             fetching = false
             availableStops = nextAvailable
             lastFeed = Some feed
@@ -191,11 +195,12 @@ let update (msg: Msg) (model: Model) : Model * Cmd<Msg> =
 
         { model with spotlightTripId = next }, Cmd.none
 
-    | TickAge ->
+    | Tick now ->
         let nextMapTrains, nextSpinePositions =
-            recomputeTrains model.lastFeedTimestampMs model.stopLookup model.spinePosByTrip model.rawTrips
+            recomputeTrains now model.lastFeedTimestampMs model.stopLookup model.spinePosByTrip model.rawTrips
 
         { model with
+            now = now
             mapTrains = nextMapTrains
             spinePosByTrip = nextSpinePositions },
         Cmd.none

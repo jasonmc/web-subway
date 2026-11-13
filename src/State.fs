@@ -67,7 +67,8 @@ type MobileView =
 
 // Immutable Elmish Model
 type Model =
-    { stopOptions: StopOption array
+    { now: DateTimeOffset
+      stopOptions: StopOption array
       stopLookup: Map<string, StopOption>
       defaultStop: StopOption
       selectedStopPrefix: string
@@ -94,7 +95,7 @@ type Msg =
     | SelectStop of stopId: string
     | GeoResolved of (string * Coordinates) option
     | RefreshFeed of showLoading: bool
-    | FeedLoaded of Result<FeedSnapshot, string>
+    | FeedLoaded of Result<DateTimeOffset * FeedSnapshot, string>
     | SetSpotlight of string option
     | ToggleSpotlight of string
-    | TickAge
+    | Tick of DateTimeOffset

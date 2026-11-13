@@ -86,7 +86,7 @@ let private renderArrivals (model: Model) (dispatch: Dispatch<Msg>) (arrivals: A
                 let rows =
                     visible
                     |> Array.mapi (fun i a ->
-                        let rel = formatRelative a.time
+                        let rel = formatRelative model.now a.time
                         let hw = headway a (Array.tryItem (i + 1) visible)
                         let t = formatNewYorkTime a.time
                         let matchedTrain = a.tripId |> Option.bind (fun tid -> Map.tryFind tid trainByTrip)
@@ -424,7 +424,7 @@ let view (model: Model) (dispatch: Dispatch<Msg>) : ReactElement =
         | FeedAge tsOpt ->
             let age =
                 match tsOpt with
-                | Some ms when ms <> 0.0<milliseconds> -> formatAge (instantFromMilliseconds ms)
+                | Some ms when ms <> 0.0<milliseconds> -> formatAge model.now (instantFromMilliseconds ms)
                 | _ -> "unknown"
 
             $"Feed age: {age}", false

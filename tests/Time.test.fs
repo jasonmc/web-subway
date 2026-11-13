@@ -44,7 +44,6 @@ for before, after in
         fun () ->
             let start = DateTimeOffset.Parse before
             let finish = DateTimeOffset.Parse after
-            vi.setSystemTime (start.UtcDateTime)
-            Vitest.expect(Feed.formatRelative finish).toBe "in 1 min"
+            Vitest.expect(Feed.formatRelative start finish).toBe "in 1 min"
             Vitest.expect(finish - start).toEqual (TimeSpan.FromMinutes 1.0)
     )

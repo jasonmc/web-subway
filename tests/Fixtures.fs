@@ -16,6 +16,7 @@ let fixedNowMs =
     |> LanguagePrimitives.FloatWithMeasure<milliseconds>
 
 let fixedNowSec = millisecondsToSeconds fixedNowMs
+let fixedNow = instantFromMilliseconds fixedNowMs
 
 type private IWriter =
     abstract finish: unit -> JS.Uint8Array

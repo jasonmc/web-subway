@@ -11,6 +11,54 @@ open Time
 Vitest.beforeEach (fun () -> resetBrowser "")
 
 Vitest.test (
+    "rendering the same model keeps countdown and feed age unchanged when the wall clock changes",
+    fun () ->
+        let initial, _ = App.init ()
+
+        let arrival: State.Arrival =
+            { time = instantFromMilliseconds (fixedNowMs + 120000.0<milliseconds>)
+              route = "G"
+              direction = State.Northbound
+              tripId = Some "clock-test"
+              destinationStopId = Some "G22" }
+
+        let model =
+            { initial with
+                lastArrivals =
+                    Some
+                        { Northbound = [| arrival |]
+                          Southbound = [||]
+                          Other = [||] }
+                status = State.FeedAge(Some fixedNowMs) }
+
+        let page = RTL.render (Ui.view model ignore)
+        Vitest.expect(document.querySelector "#lists .meta").toHaveTextContent "in 2 min"
+        Vitest.expect(document.querySelector "#status").toHaveTextContent "just now"
+        vi.setSystemTime ((instantFromMilliseconds (fixedNowMs + 60000.0<milliseconds>)).UtcDateTime)
+        page.rerender (Ui.view model ignore)
+        Vitest.expect(document.querySelector "#lists .meta").toHaveTextContent "in 2 min"
+        Vitest.expect(document.querySelector "#status").toHaveTextContent "just now"
+)
+
+Vitest.test (
+    "a supplied tick updates countdowns, feed age, and train positions independently of the wall clock",
+    fun () ->
+        let initial, _ = App.init ()
+        let snapshot = Feed.parseSnapshot fixedNow (Feed.decodeFeed (trainsFeed ()))
+        let loaded, _ = App.update (State.FeedLoaded(Ok(fixedNow, snapshot))) initial
+        let before = loaded.mapTrains |> Array.find (fun train -> train.tripId = "G-N-1")
+        vi.setSystemTime (fixedNow.AddDays(1.0).UtcDateTime)
+        let suppliedTime = fixedNow.AddSeconds(30.0)
+        let ticked, _ = App.update (State.Tick suppliedTime) loaded
+        let after = ticked.mapTrains |> Array.find (fun train -> train.tripId = "G-N-1")
+        Vitest.expect(ticked.now).toEqual suppliedTime
+        Vitest.expect(after.latitude).toBeGreaterThan (float before.latitude)
+        RTL.render (Ui.view ticked ignore) |> ignore
+        Vitest.expect(document.querySelector "#lists .meta").toHaveTextContent "in 1 min"
+        Vitest.expect(document.querySelector "#status").toHaveTextContent "30s ago"
+)
+
+Vitest.test (
     "keeps one set of timer subscriptions and disposes them on unmount and remount",
     fun () ->
         promise {

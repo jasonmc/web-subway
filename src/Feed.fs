@@ -201,8 +201,8 @@ let private smoothProgress (rawP: float) : float =
     0.58 * t + 0.42 * (t * t * (3.0 - 2.0 * t))
 
 // Snap wall clock into the feed's clock frame if MTA has a DST/timezone offset (> 25 min skew)
-let effectiveNowSec (headerTimestampMs: float<milliseconds> option) : float<seconds> =
-    let wallSec = nowMilliseconds () |> millisecondsToSeconds
+let effectiveNowSec (now: DateTimeOffset) (headerTimestampMs: float<milliseconds> option) : float<seconds> =
+    let wallSec = now |> instantToMilliseconds |> millisecondsToSeconds
 
     match headerTimestampMs with
     | Some ms when ms > 0.0<milliseconds> ->
@@ -215,14 +215,14 @@ let effectiveNowSec (headerTimestampMs: float<milliseconds> option) : float<seco
     | _ -> wallSec
 
 // Extract active train trajectories along the G line, fusing TripUpdate and VehiclePosition entities
-let extractRawTrips (feed: IFeedMessage) : RawTrainTrip array =
+let extractRawTrips (now: DateTimeOffset) (feed: IFeedMessage) : RawTrainTrip array =
     let headerMs =
         feed.header
         |> Option.bind (fun h -> toSeconds h.timestamp)
         |> Option.filter ((<>) 0.0<seconds>)
         |> Option.map secondsToMilliseconds
 
-    let nowSec = effectiveNowSec headerMs
+    let nowSec = effectiveNowSec now headerMs
 
     let vehiclesByTrip =
         [| for entity in feed.entity do
@@ -513,8 +513,8 @@ let private formatHoursMinutes (m: int) (suffix: string) =
     | h, 0 -> $"{h}h{suffix}"
     | h, min -> $"{h}h {min}m{suffix}"
 
-let formatRelative (target: DateTimeOffset) : string =
-    let remaining = target - DateTimeOffset.UtcNow
+let formatRelative (now: DateTimeOffset) (target: DateTimeOffset) : string =
+    let remaining = target - now
 
     if remaining.TotalSeconds <= 0.0 then
         "due"
@@ -525,8 +525,8 @@ let formatRelative (target: DateTimeOffset) : string =
         | m when m < 60 -> $"in {m} min"
         | m -> "in " + formatHoursMinutes m ""
 
-let formatAge (target: DateTimeOffset) : string =
-    match roundInt (DateTimeOffset.UtcNow - target).TotalSeconds with
+let formatAge (now: DateTimeOffset) (target: DateTimeOffset) : string =
+    match roundInt (now - target).TotalSeconds with
     | s when s <= 0 -> "just now"
     | s when s < 60 -> $"{s}s ago"
     | s ->
@@ -611,9 +611,11 @@ let private parseArrivals (feed: IFeedMessage) =
 
     allArrivals, { headerTimestampMs = headerTimestampMs }
 
-let private selectArrivals (arrivalsByStop: Map<string, Arrival array>) (stopId: string) : ArrivalGroup =
-    let now = DateTimeOffset.UtcNow
-
+let private selectArrivals
+    (now: DateTimeOffset)
+    (arrivalsByStop: Map<string, Arrival array>)
+    (stopId: string)
+    : ArrivalGroup =
     let arrivals =
         Map.tryFind stopId arrivalsByStop |? [||]
         |> Array.filter (fun a -> a.time >= now)
@@ -625,17 +627,17 @@ let private selectArrivals (arrivalsByStop: Map<string, Arrival array>) (stopId:
       Southbound = byDir Southbound
       Other = byDir Other }
 
-let parseFeed (feed: IFeedMessage) (stopId: string) : ArrivalGroup * FeedMeta =
+let parseFeed (now: DateTimeOffset) (feed: IFeedMessage) (stopId: string) : ArrivalGroup * FeedMeta =
     let arrivals, meta = parseArrivals feed
-    selectArrivals arrivals stopId, meta
+    selectArrivals now arrivals stopId, meta
 
-let parseSnapshot (feed: IFeedMessage) : FeedSnapshot =
+let parseSnapshot (now: DateTimeOffset) (feed: IFeedMessage) : FeedSnapshot =
     let arrivals, meta = parseArrivals feed
 
     { availableStops = stopsInFeed feed
       arrivalsByStop = arrivals
       meta = meta
-      rawTrips = extractRawTrips feed }
+      rawTrips = extractRawTrips now feed }
 
-let arrivalsForStop (feed: FeedSnapshot) (stopId: string) : ArrivalGroup =
-    selectArrivals feed.arrivalsByStop stopId
+let arrivalsForStop (now: DateTimeOffset) (feed: FeedSnapshot) (stopId: string) : ArrivalGroup =
+    selectArrivals now feed.arrivalsByStop stopId
